@@ -44,8 +44,6 @@
 
 #![deny(missing_docs)]
 
-extern crate gcc;
-
 use std::env;
 use std::ffi::{OsString, OsStr};
 use std::fs;
