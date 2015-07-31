@@ -164,7 +164,7 @@ impl Config {
         let mut cmd = Command::new("cmake");
         cmd.arg(env::current_dir().unwrap().join(&self.path))
            .current_dir(&dst.join("build"));
-        if target.contains("windows gnu") {
+        if target.contains("windows-gnu") {
             cmd.arg("-G").arg("Unix Makefiles");
         } else if msvc {
             if target.contains("i686") {
