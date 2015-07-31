@@ -44,6 +44,8 @@
 
 #![deny(missing_docs)]
 
+extern crate gcc;
+
 use std::env;
 use std::ffi::{OsString, OsStr};
 use std::fs;
@@ -165,15 +167,14 @@ impl Config {
         cmd.arg(env::current_dir().unwrap().join(&self.path))
            .current_dir(&dst.join("build"));
         if target.contains("windows-gnu") {
+            // On MinGW we need to coerce cmake to not generate a visual studio
+            // build system but instead use makefiles that MinGW can use to
+            // build.
             cmd.arg("-G").arg("Unix Makefiles");
         } else if msvc {
-            if target.contains("i686") {
-                cmd.arg("-G").arg("Visual Studio 12 2013");
-            } else if target.contains("x86_64") {
-                cmd.arg("-G").arg("Visual Studio 12 2013 Win64");
-            } else {
-                panic!("unsupported msvc target: {}", target);
-            }
+            // If we're on MSVC we need to be sure to use the right generator or
+            // otherwise we won't get 32/64 bit correct automatically.
+            cmd.arg("-G").arg(self.visual_studio_generator(&target));
         }
         let profile = match &env::var("PROFILE").unwrap()[..] {
             "bench" | "release" => "Release",
@@ -205,6 +206,27 @@ impl Config {
 
         println!("cargo:root={}", dst.display());
         return dst
+    }
+
+    fn visual_studio_generator(&self, target: &str) -> String {
+        // TODO: need a better way of scraping the VS install...
+        let candidate = format!("{:?}", gcc::windows_registry::find(target,
+                                                                    "cl.exe"));
+        let base = if candidate.contains("12.0") {
+            "Visual Studio 12 2013"
+        } else if candidate.contains("14.0") {
+            "Visual Studio 14 2015"
+        } else {
+            panic!("couldn't determine visual studio generator")
+        };
+
+        if target.contains("i686") {
+            base.to_string()
+        } else if target.contains("x86_64") {
+            format!("{} Win64", base)
+        } else {
+            panic!("unsupported msvc target: {}", target);
+        }
     }
 }
 
