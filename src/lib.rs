@@ -170,7 +170,7 @@ impl Config {
             // On MinGW we need to coerce cmake to not generate a visual studio
             // build system but instead use makefiles that MinGW can use to
             // build.
-            cmd.arg("-G").arg("Unix Makefiles");
+            cmd.arg("-G").arg("MSYS Makefiles");
         } else if msvc {
             // If we're on MSVC we need to be sure to use the right generator or
             // otherwise we won't get 32/64 bit correct automatically.
