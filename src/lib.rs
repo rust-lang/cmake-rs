@@ -59,6 +59,10 @@ pub struct Config {
     cflags: OsString,
     defines: Vec<(OsString, OsString)>,
     deps: Vec<String>,
+    target: Option<String>,
+    out_dir: Option<PathBuf>,
+    profile: Option<String>,
+    build_args: Vec<OsString>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -90,6 +94,10 @@ impl Config {
             cflags: OsString::new(),
             defines: Vec::new(),
             deps: Vec::new(),
+            profile: None,
+            out_dir: None,
+            target: None,
+            build_args: Vec::new(),
         }
     }
 
@@ -119,16 +127,53 @@ impl Config {
         self
     }
 
+    /// Sets the target triple for this compilation.
+    ///
+    /// This is automatically scraped from `$TARGET` which is set for Cargo
+    /// build scripts so it's not necessary to call this from a build script.
+    pub fn target(&mut self, target: &str) -> &mut Config {
+        self.target = Some(target.to_string());
+        self
+    }
+
+    /// Sets the output directory for this compilation.
+    ///
+    /// This is automatically scraped from `$OUT_DIR` which is set for Cargo
+    /// build scripts so it's not necessary to call this from a build script.
+    pub fn out_dir<P: AsRef<Path>>(&mut self, out: P) -> &mut Config {
+        self.out_dir = Some(out.as_ref().to_path_buf());
+        self
+    }
+
+    /// Sets the profile for this compilation.
+    ///
+    /// This is automatically scraped from `$PROFILE` which is set for Cargo
+    /// build scripts so it's not necessary to call this from a build script.
+    pub fn profile(&mut self, profile: &str) -> &mut Config {
+        self.profile = Some(profile.to_string());
+        self
+    }
+
+    /// Add an argument to the final `cmake` build step
+    pub fn build_arg<A: AsRef<OsStr>>(&mut self, arg: A) -> &mut Config {
+        self.build_args.push(arg.as_ref().to_owned());
+        self
+    }
+
     /// Run this configuration, compiling the library with all the configured
     /// options.
     ///
     /// This will run both the build system generator command as well as the
     /// command to build the library.
     pub fn build(&mut self) -> PathBuf {
-        let target = env::var("TARGET").unwrap();
+        let target = self.target.clone().unwrap_or_else(|| {
+            env::var("TARGET").unwrap()
+        });
         let msvc = target.contains("msvc");
 
-        let dst = PathBuf::from(&env::var("OUT_DIR").unwrap());
+        let dst = self.out_dir.clone().unwrap_or_else(|| {
+            PathBuf::from(&env::var("OUT_DIR").unwrap())
+        });
         let _ = fs::create_dir(&dst.join("build"));
 
         // Build up the CFLAGS that we're going to use
@@ -176,11 +221,14 @@ impl Config {
             // otherwise we won't get 32/64 bit correct automatically.
             cmd.arg("-G").arg(self.visual_studio_generator(&target));
         }
-        let profile = match &env::var("PROFILE").unwrap()[..] {
-            "bench" | "release" => "Release",
-            _ if msvc => "Release", // currently we need to always use the same CRT
-            _ => "Debug",
-        };
+        let profile = self.profile.clone().unwrap_or_else(|| {
+            match &env::var("PROFILE").unwrap()[..] {
+                "bench" | "release" => "Release",
+                // currently we need to always use the same CRT for MSVC
+                _ if msvc => "Release",
+                _ => "Debug",
+            }.to_string()
+        });
         for &(ref k, ref v) in &self.defines {
             let mut os = OsString::from("-D");
             os.push(k);
@@ -202,6 +250,7 @@ impl Config {
                     .arg("--build").arg(".")
                     .arg("--target").arg("install")
                     .arg("--config").arg(profile)
+                    .arg("--").args(&self.build_args)
                     .current_dir(&dst.join("build")), "cmake");
 
         println!("cargo:root={}", dst.display());
