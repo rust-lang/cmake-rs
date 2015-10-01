@@ -170,29 +170,12 @@ impl Config {
             env::var("TARGET").unwrap()
         });
         let msvc = target.contains("msvc");
+        let compiler = gcc::Config::new().get_compiler();
 
         let dst = self.out_dir.clone().unwrap_or_else(|| {
             PathBuf::from(&env::var("OUT_DIR").unwrap())
         });
         let _ = fs::create_dir(&dst.join("build"));
-
-        // Build up the CFLAGS that we're going to use
-        let mut cflags = env::var_os("CFLAGS").unwrap_or(OsString::new());
-        cflags.push(" ");
-        cflags.push(&self.cflags);
-        if !msvc {
-            cflags.push(" -ffunction-sections");
-            cflags.push(" -fdata-sections");
-
-            if target.contains("i686") {
-                cflags.push(" -m32");
-            } else if target.contains("x86_64") {
-                cflags.push(" -m64");
-            }
-            if !target.contains("i686") {
-                cflags.push(" -fPIC");
-            }
-        }
 
         // Add all our dependencies to our cmake paths
         let mut cmake_prefix_path = Vec::new();
@@ -238,11 +221,22 @@ impl Config {
         }
         let mut dstflag = OsString::from("-DCMAKE_INSTALL_PREFIX=");
         dstflag.push(&dst);
+
+        // Build up the CFLAGS that we're going to use
         let mut cflagsflag = OsString::from("-DCMAKE_C_FLAGS=");
-        cflagsflag.push(&cflags);
+        cflagsflag.push(&self.cflags);
+        for arg in compiler.args() {
+            cflagsflag.push(" ");
+            cflagsflag.push(arg);
+        }
+
+        let mut ccompiler = OsString::from("-DCMAKE_C_COMPILER=");
+        ccompiler.push(compiler.path());
+
         run(cmd.arg(&format!("-DCMAKE_BUILD_TYPE={}", profile))
                .arg(dstflag)
                .arg(cflagsflag)
+               .arg(ccompiler)
                .env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
 
         // And build!
