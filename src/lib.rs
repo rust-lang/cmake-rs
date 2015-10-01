@@ -219,25 +219,34 @@ impl Config {
             os.push(v);
             cmd.arg(os);
         }
-        let mut dstflag = OsString::from("-DCMAKE_INSTALL_PREFIX=");
-        dstflag.push(&dst);
 
-        // Build up the CFLAGS that we're going to use
-        let mut cflagsflag = OsString::from("-DCMAKE_C_FLAGS=");
-        cflagsflag.push(&self.cflags);
-        for arg in compiler.args() {
-            cflagsflag.push(" ");
-            cflagsflag.push(arg);
+        if !self.defined("CMAKE_INSTALL_PREFIX") {
+            let mut dstflag = OsString::from("-DCMAKE_INSTALL_PREFIX=");
+            dstflag.push(&dst);
+            cmd.arg(dstflag);
         }
 
-        let mut ccompiler = OsString::from("-DCMAKE_C_COMPILER=");
-        ccompiler.push(compiler.path());
+        if !self.defined("CMAKE_C_FLAGS") {
+            let mut cflagsflag = OsString::from("-DCMAKE_C_FLAGS=");
+            cflagsflag.push(&self.cflags);
+            for arg in compiler.args() {
+                cflagsflag.push(" ");
+                cflagsflag.push(arg);
+            }
+            cmd.arg(cflagsflag);
+        }
 
-        run(cmd.arg(&format!("-DCMAKE_BUILD_TYPE={}", profile))
-               .arg(dstflag)
-               .arg(cflagsflag)
-               .arg(ccompiler)
-               .env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
+        if !self.defined("CMAKE_C_COMPILER") {
+            let mut ccompiler = OsString::from("-DCMAKE_C_COMPILER=");
+            ccompiler.push(compiler.path());
+            cmd.arg(ccompiler);
+        }
+
+        if !self.defined("CMAKE_BUILD_TYPE") {
+            cmd.arg(&format!("-DCMAKE_BUILD_TYPE={}", profile));
+        }
+
+        run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
 
         // And build!
         run(Command::new("cmake")
@@ -270,6 +279,10 @@ impl Config {
         } else {
             panic!("unsupported msvc target: {}", target);
         }
+    }
+
+    fn defined(&self, var: &str) -> bool {
+        self.defines.iter().any(|&(ref a, _)| a == var)
     }
 }
 
