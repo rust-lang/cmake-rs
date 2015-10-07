@@ -236,9 +236,14 @@ impl Config {
             cmd.arg(cflagsflag);
         }
 
+        // Apparently cmake likes to have an absolute path to the compiler as
+        // otherwise it sometimes thinks that this variable changed as it thinks
+        // the found compiler, /usr/bin/cc, differs from the specified compiler,
+        // cc. Not entirely sure what's up, but at least this means cmake
+        // doesn't get confused?
         if !self.defined("CMAKE_C_COMPILER") {
             let mut ccompiler = OsString::from("-DCMAKE_C_COMPILER=");
-            ccompiler.push(compiler.path());
+            ccompiler.push(find_exe(compiler.path()));
             cmd.arg(ccompiler);
         }
 
@@ -299,6 +304,13 @@ fn run(cmd: &mut Command, program: &str) {
     if !status.success() {
         fail(&format!("command did not execute successfully, got: {}", status));
     }
+}
+
+fn find_exe(path: &Path) -> PathBuf {
+    env::split_paths(&env::var_os("PATH").unwrap_or(OsString::new()))
+        .map(|p| p.join(path))
+        .find(|p| fs::metadata(p).is_ok())
+        .unwrap_or(path.to_owned())
 }
 
 fn fail(s: &str) -> ! {
