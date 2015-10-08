@@ -241,7 +241,10 @@ impl Config {
         // the found compiler, /usr/bin/cc, differs from the specified compiler,
         // cc. Not entirely sure what's up, but at least this means cmake
         // doesn't get confused?
-        if !self.defined("CMAKE_C_COMPILER") {
+        //
+        // Also don't specify this on Windows as it's not needed for MSVC and
+        // for MinGW it doesn't really vary.
+        if !self.defined("CMAKE_C_COMPILER") && env::consts::FAMILY != "windows" {
             let mut ccompiler = OsString::from("-DCMAKE_C_COMPILER=");
             ccompiler.push(find_exe(compiler.path()));
             cmd.arg(ccompiler);
