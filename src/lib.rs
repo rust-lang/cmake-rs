@@ -304,6 +304,14 @@ impl Config {
         self.defines.iter().any(|&(ref a, _)| a == var)
     }
 
+    // If a cmake project has previously been built (e.g. CMakeCache.txt already
+    // exists), then cmake will choke if the source directory for the original
+    // project being built has changed. Detect this situation through the
+    // `CMAKE_HOME_DIRECTORY` variable that cmake emits and if it doesn't match
+    // we blow away the build directory and start from scratch (the recommended
+    // solution apparently [1]).
+    //
+    // [1]: https://cmake.org/pipermail/cmake/2012-August/051545.html
     fn maybe_clear(&self, dir: &Path) {
         let src = match self.path.to_str() {
             Some(src) => src,
