@@ -48,8 +48,9 @@ extern crate gcc;
 
 use std::env;
 use std::ffi::{OsString, OsStr};
-use std::fs;
+use std::fs::{self, File};
 use std::io::ErrorKind;
+use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -90,7 +91,7 @@ impl Config {
     /// at the path `path`.
     pub fn new<P: AsRef<Path>>(path: P) -> Config {
         Config {
-            path: path.as_ref().to_path_buf(),
+            path: env::current_dir().unwrap().join(path),
             cflags: OsString::new(),
             defines: Vec::new(),
             deps: Vec::new(),
@@ -175,7 +176,9 @@ impl Config {
         let dst = self.out_dir.clone().unwrap_or_else(|| {
             PathBuf::from(&env::var("OUT_DIR").unwrap())
         });
-        let _ = fs::create_dir(&dst.join("build"));
+        let build = dst.join("build");
+        self.maybe_clear(&build);
+        let _ = fs::create_dir(&build);
 
         // Add all our dependencies to our cmake paths
         let mut cmake_prefix_path = Vec::new();
@@ -192,8 +195,8 @@ impl Config {
 
         // Build up the first cmake command to build the build system.
         let mut cmd = Command::new("cmake");
-        cmd.arg(env::current_dir().unwrap().join(&self.path))
-           .current_dir(&dst.join("build"));
+        cmd.arg(&self.path)
+           .current_dir(&build);
         if target.contains("windows-gnu") {
             // On MinGW we need to coerce cmake to not generate a visual studio
             // build system but instead use makefiles that MinGW can use to
@@ -256,13 +259,21 @@ impl Config {
 
         run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
 
+        let mut parallel_args = Vec::new();
+        if fs::metadata(&dst.join("build/Makefile")).is_ok() {
+            if let Ok(s) = env::var("NUM_JOBS") {
+                parallel_args.push(format!("-j{}", s));
+            }
+        }
+
         // And build!
         run(Command::new("cmake")
                     .arg("--build").arg(".")
                     .arg("--target").arg("install")
                     .arg("--config").arg(profile)
                     .arg("--").args(&self.build_args)
-                    .current_dir(&dst.join("build")), "cmake");
+                    .args(&parallel_args)
+                    .current_dir(&build), "cmake");
 
         println!("cargo:root={}", dst.display());
         return dst
@@ -291,6 +302,28 @@ impl Config {
 
     fn defined(&self, var: &str) -> bool {
         self.defines.iter().any(|&(ref a, _)| a == var)
+    }
+
+    fn maybe_clear(&self, dir: &Path) {
+        let src = match self.path.to_str() {
+            Some(src) => src,
+            None => return,
+        };
+        let mut contents = String::new();
+        let mut f = match File::open(dir.join("CMakeCache.txt")) {
+            Ok(f) => f,
+            Err(..) => return,
+        };
+        f.read_to_string(&mut contents).unwrap();
+        drop(f);
+        for line in contents.lines() {
+            if line.contains("CMAKE_HOME_DIRECTORY") && !line.contains(src) {
+                println!("detected home dir change, cleaning out entire build \
+                          directory");
+                fs::remove_dir_all(dir).unwrap();
+                break
+            }
+        }
     }
 }
 
