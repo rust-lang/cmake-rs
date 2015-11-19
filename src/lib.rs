@@ -61,6 +61,7 @@ pub struct Config {
     defines: Vec<(OsString, OsString)>,
     deps: Vec<String>,
     target: Option<String>,
+    host: Option<String>,
     out_dir: Option<PathBuf>,
     profile: Option<String>,
     build_args: Vec<OsString>,
@@ -98,6 +99,7 @@ impl Config {
             profile: None,
             out_dir: None,
             target: None,
+            host: None,
             build_args: Vec::new(),
         }
     }
@@ -137,6 +139,15 @@ impl Config {
         self
     }
 
+    /// Sets the host triple for this compilation.
+    ///
+    /// This is automatically scraped from `$HOST` which is set for Cargo
+    /// build scripts so it's not necessary to call this from a build script.
+    pub fn host(&mut self, host: &str) -> &mut Config {
+        self.host = Some(host.to_string());
+        self
+    }
+
     /// Sets the output directory for this compilation.
     ///
     /// This is automatically scraped from `$OUT_DIR` which is set for Cargo
@@ -170,8 +181,16 @@ impl Config {
         let target = self.target.clone().unwrap_or_else(|| {
             env::var("TARGET").unwrap()
         });
+        let host = self.host.clone().unwrap_or_else(|| {
+            env::var("HOST").unwrap()
+        });
         let msvc = target.contains("msvc");
-        let compiler = gcc::Config::new().get_compiler();
+        let compiler = gcc::Config::new().cargo_metadata(false)
+                                         .opt_level(0)
+                                         .debug(false)
+                                         .target(&target)
+                                         .host(&host)
+                                         .get_compiler();
 
         let dst = self.out_dir.clone().unwrap_or_else(|| {
             PathBuf::from(&env::var("OUT_DIR").unwrap())
