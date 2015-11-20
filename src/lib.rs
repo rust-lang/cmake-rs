@@ -65,6 +65,7 @@ pub struct Config {
     out_dir: Option<PathBuf>,
     profile: Option<String>,
     build_args: Vec<OsString>,
+    cmake_target: Option<String>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -101,6 +102,7 @@ impl Config {
             target: None,
             host: None,
             build_args: Vec::new(),
+            cmake_target: None,
         }
     }
 
@@ -172,6 +174,13 @@ impl Config {
         self
     }
 
+    /// Sets the build target for the final `cmake` build step, this will
+    /// default to "install" if not specified.
+    pub fn build_target(&mut self, target: &str) -> &mut Config {
+        self.cmake_target = Some(target.to_string());
+        self
+    }
+
     /// Run this configuration, compiling the library with all the configured
     /// options.
     ///
@@ -179,10 +188,10 @@ impl Config {
     /// command to build the library.
     pub fn build(&mut self) -> PathBuf {
         let target = self.target.clone().unwrap_or_else(|| {
-            env::var("TARGET").unwrap()
+            getenv_unwrap("TARGET")
         });
         let host = self.host.clone().unwrap_or_else(|| {
-            env::var("HOST").unwrap()
+            getenv_unwrap("HOST")
         });
         let msvc = target.contains("msvc");
         let compiler = gcc::Config::new().cargo_metadata(false)
@@ -193,7 +202,7 @@ impl Config {
                                          .get_compiler();
 
         let dst = self.out_dir.clone().unwrap_or_else(|| {
-            PathBuf::from(&env::var("OUT_DIR").unwrap())
+            PathBuf::from(getenv_unwrap("OUT_DIR"))
         });
         let build = dst.join("build");
         self.maybe_clear(&build);
@@ -227,7 +236,7 @@ impl Config {
             cmd.arg("-G").arg(self.visual_studio_generator(&target));
         }
         let profile = self.profile.clone().unwrap_or_else(|| {
-            match &env::var("PROFILE").unwrap()[..] {
+            match &getenv_unwrap("PROFILE")[..] {
                 "bench" | "release" => "Release",
                 // currently we need to always use the same CRT for MSVC
                 _ if msvc => "Release",
@@ -286,9 +295,10 @@ impl Config {
         }
 
         // And build!
+        let target = self.cmake_target.clone().unwrap_or("install".to_string());
         run(Command::new("cmake")
                     .arg("--build").arg(".")
-                    .arg("--target").arg("install")
+                    .arg("--target").arg(target)
                     .arg("--config").arg(profile)
                     .arg("--").args(&self.build_args)
                     .args(&parallel_args)
@@ -374,6 +384,13 @@ fn find_exe(path: &Path) -> PathBuf {
         .map(|p| p.join(path))
         .find(|p| fs::metadata(p).is_ok())
         .unwrap_or(path.to_owned())
+}
+
+fn getenv_unwrap(v: &str) -> String {
+    match env::var(v) {
+        Ok(s) => s,
+        Err(..) => fail(&format!("environment variable `{}` not defined", v)),
+    }
 }
 
 fn fail(s: &str) -> ! {
