@@ -346,12 +346,16 @@ impl Config {
             Some(src) => src,
             None => return,
         };
-        let mut contents = String::new();
         let mut f = match File::open(dir.join("CMakeCache.txt")) {
             Ok(f) => f,
             Err(..) => return,
         };
-        f.read_to_string(&mut contents).unwrap();
+        let mut u8contents = Vec::new();
+        match f.read_to_end(&mut u8contents) {
+            Ok(f) => f,
+            Err(..) => return,
+        };
+        let contents = String::from_utf8_lossy(&u8contents);
         drop(f);
         for line in contents.lines() {
             if line.contains("CMAKE_HOME_DIRECTORY") && !line.contains(src) {
