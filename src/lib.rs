@@ -194,7 +194,13 @@ impl Config {
             getenv_unwrap("HOST")
         });
         let msvc = target.contains("msvc");
-        let compiler = gcc::Config::new().cargo_metadata(false)
+        let c_compiler = gcc::Config::new().cargo_metadata(false)
+                                         .opt_level(0)
+                                         .debug(false)
+                                         .target(&target)
+                                         .host(&host)
+                                         .get_compiler();
+        let cxx_compiler = gcc::Config::new().cargo_metadata(false)
                                          .opt_level(0)
                                          .debug(false)
                                          .target(&target)
@@ -257,28 +263,44 @@ impl Config {
             cmd.arg(dstflag);
         }
 
-        if !self.defined("CMAKE_C_FLAGS") {
-            let mut cflagsflag = OsString::from("-DCMAKE_C_FLAGS=");
-            cflagsflag.push(&self.cflags);
-            for arg in compiler.args() {
-                cflagsflag.push(" ");
-                cflagsflag.push(arg);
-            }
-            cmd.arg(cflagsflag);
-        }
+        {
+            let mut set_compiler = |kind: &str,
+                                    compiler: &gcc::Tool,
+                                    extra: &OsString| {
+                let flag_var = format!("CMAKE_{}_FLAGS", kind);
+                let tool_var = format!("CMAKE_{}_COMPILER", kind);
+                if !self.defined(&flag_var) {
+                    let mut flagsflag = OsString::from("-D");
+                    flagsflag.push(&flag_var);
+                    flagsflag.push("=");
+                    flagsflag.push(extra);
+                    for arg in compiler.args() {
+                        flagsflag.push(" ");
+                        flagsflag.push(arg);
+                    }
+                    cmd.arg(flagsflag);
+                }
 
-        // Apparently cmake likes to have an absolute path to the compiler as
-        // otherwise it sometimes thinks that this variable changed as it thinks
-        // the found compiler, /usr/bin/cc, differs from the specified compiler,
-        // cc. Not entirely sure what's up, but at least this means cmake
-        // doesn't get confused?
-        //
-        // Also don't specify this on Windows as it's not needed for MSVC and
-        // for MinGW it doesn't really vary.
-        if !self.defined("CMAKE_C_COMPILER") && env::consts::FAMILY != "windows" {
-            let mut ccompiler = OsString::from("-DCMAKE_C_COMPILER=");
-            ccompiler.push(find_exe(compiler.path()));
-            cmd.arg(ccompiler);
+                // Apparently cmake likes to have an absolute path to the
+                // compiler as otherwise it sometimes thinks that this variable
+                // changed as it thinks the found compiler, /usr/bin/cc,
+                // differs from the specified compiler, cc. Not entirely sure
+                // what's up, but at least this means cmake doesn't get
+                // confused?
+                //
+                // Also don't specify this on Windows as it's not needed for
+                // MSVC and for MinGW it doesn't really vary.
+                if !self.defined(&tool_var) && env::consts::FAMILY != "windows" {
+                    let mut ccompiler = OsString::from("-D");
+                    ccompiler.push(&tool_var);
+                    ccompiler.push("=");
+                    ccompiler.push(find_exe(compiler.path()));
+                    cmd.arg(ccompiler);
+                }
+            };
+
+            set_compiler("C", &c_compiler, &self.cflags);
+            set_compiler("CXX", &cxx_compiler, &OsString::new());
         }
 
         if !self.defined("CMAKE_BUILD_TYPE") {
