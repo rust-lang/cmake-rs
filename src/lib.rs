@@ -201,6 +201,7 @@ impl Config {
                                          .host(&host)
                                          .get_compiler();
         let cxx_compiler = gcc::Config::new().cargo_metadata(false)
+                                         .cpp(true)
                                          .opt_level(0)
                                          .debug(false)
                                          .target(&target)
