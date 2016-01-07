@@ -237,7 +237,7 @@ impl Config {
             // build system but instead use makefiles that MinGW can use to
             // build. MinGW vs. MSYS makefiles can be configured through the env
             // variable USE_MINGW_MAKEFILES.
-            cmd.arg("-G").arg(match env::var("USE_MINGW_MAKEFILES").is_ok() {
+            cmd.arg("-G").arg(match env::var("MINGW").is_ok() {
                 true => "MinGW Makefiles",
                 false => "MSYS Makefiles"
             });
