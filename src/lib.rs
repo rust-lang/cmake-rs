@@ -235,8 +235,12 @@ impl Config {
         if target.contains("windows-gnu") {
             // On MinGW we need to coerce cmake to not generate a visual studio
             // build system but instead use makefiles that MinGW can use to
-            // build.
-            cmd.arg("-G").arg("MSYS Makefiles");
+            // build. MinGW vs. MSYS makefiles can be configured through the env
+            // variable USE_MINGW_MAKEFILES.
+            cmd.arg("-G").arg(match env::var("MINGW").is_ok() {
+                true => "MinGW Makefiles",
+                false => "MSYS Makefiles"
+            });
         } else if msvc {
             // If we're on MSVC we need to be sure to use the right generator or
             // otherwise we won't get 32/64 bit correct automatically.
