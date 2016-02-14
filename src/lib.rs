@@ -233,10 +233,32 @@ impl Config {
         cmd.arg(&self.path)
            .current_dir(&build);
         if target.contains("windows-gnu") {
-            // On MinGW we need to coerce cmake to not generate a visual studio
-            // build system but instead use makefiles that MinGW can use to
-            // build.
-            cmd.arg("-G").arg("MSYS Makefiles");
+            if host.contains("windows") {
+                // On MinGW we need to coerce cmake to not generate a visual
+                // studio build system but instead use makefiles that MinGW can
+                // use to build.
+                cmd.arg("-G").arg("MSYS Makefiles");
+            } else {
+                // If we're cross compiling onto windows, then set some
+                // variables which will hopefully get things to succeed. Some
+                // systems may need the `windres` or `dlltool` variables set, so
+                // set them if possible.
+                if !self.defined("CMAKE_SYSTEM_NAME") {
+                    cmd.arg("-DCMAKE_SYSTEM_NAME=Windows");
+                }
+                if !self.defined("CMAKE_RC_COMPILER") {
+                    let exe = find_exe(c_compiler.path());
+                    if let Some(name) = exe.file_name().unwrap().to_str() {
+                        let name = name.replace("gcc", "windres");
+                        let windres = exe.with_file_name(name);
+                        if windres.is_file() {
+                            let mut arg = OsString::from("-DCMAKE_RC_COMPILER=");
+                            arg.push(&windres);
+                            cmd.arg(arg);
+                        }
+                    }
+                }
+            }
         } else if msvc {
             // If we're on MSVC we need to be sure to use the right generator or
             // otherwise we won't get 32/64 bit correct automatically.
