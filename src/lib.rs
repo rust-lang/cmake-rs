@@ -313,7 +313,9 @@ impl Config {
                 //
                 // Also don't specify this on Windows as it's not needed for
                 // MSVC and for MinGW it doesn't really vary.
-                if !self.defined(&tool_var) && env::consts::FAMILY != "windows" {
+                if !self.defined("CMAKE_TOOLCHAIN_FILE")
+                   && !self.defined(&tool_var)
+                   && env::consts::FAMILY != "windows" {
                     let mut ccompiler = OsString::from("-D");
                     ccompiler.push(&tool_var);
                     ccompiler.push("=");
