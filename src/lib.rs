@@ -356,12 +356,20 @@ impl Config {
     }
 
     fn visual_studio_generator(&self, target: &str) -> String {
-        // TODO: need a better way of scraping the VS install...
-        let candidate = format!("{:?}", gcc::windows_registry::find(target,
-                                                                    "cl.exe"));
-        let base = if candidate.contains("12.0") {
+        let candidate = gcc::windows_registry::find(target, "link.exe");
+        let mut candidate = candidate.expect("couldn't find a visual studio installation");
+
+        // The version number returned by `link.exe` seems to always match the one of
+        // the Visual Studio installation.
+
+        // passing a dummy param otherwise the version isn't printed
+        let output = candidate.arg("/TEST").output();
+        let output = output.expect("failed to execute link.exe");
+        let output = String::from_utf8(output.stdout).unwrap();
+
+        let base = if output.contains("12.0") {
             "Visual Studio 12 2013"
-        } else if candidate.contains("14.0") {
+        } else if output.contains("14.0") {
             "Visual Studio 14 2015"
         } else {
             panic!("couldn't determine visual studio generator")
