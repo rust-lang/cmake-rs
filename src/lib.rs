@@ -57,6 +57,7 @@ use std::process::Command;
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
     path: PathBuf,
+    generator: Option<OsString>,
     cflags: OsString,
     defines: Vec<(OsString, OsString)>,
     deps: Vec<String>,
@@ -94,6 +95,7 @@ impl Config {
     pub fn new<P: AsRef<Path>>(path: P) -> Config {
         Config {
             path: env::current_dir().unwrap().join(path),
+            generator: None,
             cflags: OsString::new(),
             defines: Vec::new(),
             deps: Vec::new(),
@@ -104,6 +106,12 @@ impl Config {
             build_args: Vec::new(),
             cmake_target: None,
         }
+    }
+
+    /// Sets the build-tool generator (`-G`) for this compilation.
+    pub fn generator<T: AsRef<OsStr>>(&mut self, generator: T) -> &mut Config {
+        self.generator = Some(generator.as_ref().to_owned());
+        self
     }
 
     /// Adds a custom flag to pass down to the compiler, supplementing those
@@ -237,7 +245,9 @@ impl Config {
                 // On MinGW we need to coerce cmake to not generate a visual
                 // studio build system but instead use makefiles that MinGW can
                 // use to build.
-                cmd.arg("-G").arg("MSYS Makefiles");
+                if self.generator.is_none() {
+                    cmd.arg("-G").arg("MSYS Makefiles");
+                }
             } else {
                 // If we're cross compiling onto windows, then set some
                 // variables which will hopefully get things to succeed. Some
@@ -262,7 +272,12 @@ impl Config {
         } else if msvc {
             // If we're on MSVC we need to be sure to use the right generator or
             // otherwise we won't get 32/64 bit correct automatically.
-            cmd.arg("-G").arg(self.visual_studio_generator(&target));
+            if self.generator.is_none() {
+                cmd.arg("-G").arg(self.visual_studio_generator(&target));
+            }
+        }
+        if let Some(ref generator) = self.generator {
+            cmd.arg("-G").arg(generator);
         }
         let profile = self.profile.clone().unwrap_or_else(|| {
             match &getenv_unwrap("PROFILE")[..] {
