@@ -347,6 +347,12 @@ impl Config {
             cmd.arg(&format!("-DCMAKE_BUILD_TYPE={}", profile));
         }
 
+        if !self.defined("CMAKE_TOOLCHAIN_FILE") {
+            if let Ok(s) = env::var("CMAKE_TOOLCHAIN_FILE") {
+                cmd.arg(&format!("-DCMAKE_TOOLCHAIN_FILE={}", s));
+            }
+        }
+
         run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
 
         let mut parallel_args = Vec::new();
