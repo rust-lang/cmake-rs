@@ -94,7 +94,7 @@ impl Config {
     /// at the path `path`.
     pub fn new<P: AsRef<Path>>(path: P) -> Config {
         Config {
-            path: env::current_dir().unwrap().join(path),
+            path: fs::canonicalize(env::current_dir().unwrap().join(path)).unwrap(),
             generator: None,
             cflags: OsString::new(),
             defines: Vec::new(),
