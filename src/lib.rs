@@ -94,6 +94,10 @@ impl Config {
     /// at the path `path`.
     pub fn new<P: AsRef<Path>>(path: P) -> Config {
         Config {
+            // CMake will apparently store canonicalized paths which normally
+            // isn't relevant to us but later on in `maybe_clear` we look for
+            // this path in `CMakeCache.txt`. As a result we canonicalize it
+            // here up front to ensure we're both checking the same thing.
             path: fs::canonicalize(env::current_dir().unwrap().join(path)).unwrap(),
             generator: None,
             cflags: OsString::new(),
