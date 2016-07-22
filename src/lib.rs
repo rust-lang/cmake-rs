@@ -54,6 +54,9 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[cfg(windows)]
+mod registry;
+
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
     path: PathBuf,
@@ -94,11 +97,7 @@ impl Config {
     /// at the path `path`.
     pub fn new<P: AsRef<Path>>(path: P) -> Config {
         Config {
-            // CMake will apparently store canonicalized paths which normally
-            // isn't relevant to us but later on in `maybe_clear` we look for
-            // this path in `CMakeCache.txt`. As a result we canonicalize it
-            // here up front to ensure we're both checking the same thing.
-            path: fs::canonicalize(env::current_dir().unwrap().join(path)).unwrap(),
+            path: env::current_dir().unwrap().join(path),
             generator: None,
             cflags: OsString::new(),
             defines: Vec::new(),
@@ -381,15 +380,24 @@ impl Config {
     }
 
     fn visual_studio_generator(&self, target: &str) -> String {
-        // TODO: need a better way of scraping the VS install...
-        let candidate = format!("{:?}", gcc::windows_registry::find(target,
-                                                                    "cl.exe"));
-        let base = if candidate.contains("12.0") {
-            "Visual Studio 12 2013"
-        } else if candidate.contains("14.0") {
-            "Visual Studio 14 2015"
-        } else {
-            panic!("couldn't determine visual studio generator")
+        let base = match std::env::var("VisualStudioVersion") {
+            Ok(version) => match version.as_str() {
+                "12.0" => "Visual Studio 12 2013",
+                "14.0" => "Visual Studio 14 2015",
+                // TODO: 15.0?
+                _ => panic!("Unsupported or unknown VisualStudio version.")
+            },
+            _ => {
+                // Check for the presense of a specific registry key
+                // that indicates visual studio is installed.
+                if self.has_msbuild_version("14.0") {
+                    "Visual Studio 14 2015"
+                } else if self.has_msbuild_version("12.0") {
+                    "Visual Studio 12 2013"
+                } else {
+                    panic!("couldn't determine visual studio generator")
+                }
+            }
         };
 
         if target.contains("i686") {
@@ -399,6 +407,18 @@ impl Config {
         } else {
             panic!("unsupported msvc target: {}", target);
         }
+    }
+
+    #[cfg(not(windows))]
+    fn has_msbuild_version(&self, version: &str) -> bool {
+        false
+    }
+
+    #[cfg(windows)]
+    fn has_msbuild_version(&self, version: &str) -> bool {
+        let key = format!("SOFTWARE\\Microsoft\\MSBuild\\ToolsVersions\\{}", version);
+        let key = OsStr::new(&key);
+        registry::LOCAL_MACHINE.open(key).is_ok()
     }
 
     fn defined(&self, var: &str) -> bool {
@@ -414,7 +434,11 @@ impl Config {
     //
     // [1]: https://cmake.org/pipermail/cmake/2012-August/051545.html
     fn maybe_clear(&self, dir: &Path) {
-        let src = match self.path.to_str() {
+        // CMake will apparently store canonicalized paths which normally
+        // isn't relevant to us but we canonicalize it here to ensure
+        // we're both checking the same thing.
+        let path = fs::canonicalize(&self.path).unwrap_or(self.path.clone());
+        let src = match path.to_str() {
             Some(src) => src,
             None => return,
         };
