@@ -381,12 +381,18 @@ impl Config {
 
     fn visual_studio_generator(&self, target: &str) -> String {
         let base = match std::env::var("VisualStudioVersion") {
-            Ok(version) => match version.as_str() {
-                "12.0" => "Visual Studio 12 2013",
-                "14.0" => "Visual Studio 14 2015",
-                // TODO: 15.0?
-                _ => panic!("Unsupported or unknown VisualStudio version.")
-            },
+            Ok(version) => {
+                match &version[..] {
+                    "12.0" => "Visual Studio 12 2013",
+                    "14.0" => "Visual Studio 14 2015",
+                    vers => panic!("\n\n\
+                        unsupported or unknown VisualStudio version: {}\n\
+                        if another version is installed consider running \
+                        the appropriate vcvars script before building this \
+                        crate\n\
+                    ", vers),
+                }
+            }
             _ => {
                 // Check for the presense of a specific registry key
                 // that indicates visual studio is installed.
@@ -395,7 +401,12 @@ impl Config {
                 } else if self.has_msbuild_version("12.0") {
                     "Visual Studio 12 2013"
                 } else {
-                    panic!("couldn't determine visual studio generator")
+                    panic!("\n\n\
+                        couldn't determine visual studio generator\n\
+                        if VisualStudio is installed, however, consider \
+                        running the appropriate vcvars script before building \
+                        this crate\n\
+                    ");
                 }
             }
         };
@@ -410,15 +421,15 @@ impl Config {
     }
 
     #[cfg(not(windows))]
-    fn has_msbuild_version(&self, version: &str) -> bool {
+    fn has_msbuild_version(&self, _version: &str) -> bool {
         false
     }
 
     #[cfg(windows)]
     fn has_msbuild_version(&self, version: &str) -> bool {
-        let key = format!("SOFTWARE\\Microsoft\\MSBuild\\ToolsVersions\\{}", version);
-        let key = OsStr::new(&key);
-        registry::LOCAL_MACHINE.open(key).is_ok()
+        let key = format!("SOFTWARE\\Microsoft\\MSBuild\\ToolsVersions\\{}",
+                          version);
+        registry::LOCAL_MACHINE.open(key.as_ref()).is_ok()
     }
 
     fn defined(&self, var: &str) -> bool {
