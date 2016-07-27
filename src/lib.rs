@@ -61,6 +61,7 @@ mod registry;
 pub struct Config {
     path: PathBuf,
     generator: Option<OsString>,
+    opt_level: u32,
     cflags: OsString,
     defines: Vec<(OsString, OsString)>,
     deps: Vec<String>,
@@ -99,6 +100,7 @@ impl Config {
         Config {
             path: env::current_dir().unwrap().join(path),
             generator: None,
+            opt_level: 0,
             cflags: OsString::new(),
             defines: Vec::new(),
             deps: Vec::new(),
@@ -116,6 +118,14 @@ impl Config {
         self.generator = Some(generator.as_ref().to_owned());
         self
     }
+
+
+    /// Sets the optimization level of the generated object files.
+    pub fn opt_level(&mut self, level: u32) -> &mut Config {
+        self.opt_level = level;
+        self
+    }
+
 
     /// Adds a custom flag to pass down to the compiler, supplementing those
     /// that this library already passes.
@@ -206,14 +216,14 @@ impl Config {
         });
         let msvc = target.contains("msvc");
         let c_compiler = gcc::Config::new().cargo_metadata(false)
-                                         .opt_level(0)
+                                         .opt_level(self.opt_level)
                                          .debug(false)
                                          .target(&target)
                                          .host(&host)
                                          .get_compiler();
         let cxx_compiler = gcc::Config::new().cargo_metadata(false)
                                          .cpp(true)
-                                         .opt_level(0)
+                                         .opt_level(self.opt_level)
                                          .debug(false)
                                          .target(&target)
                                          .host(&host)
