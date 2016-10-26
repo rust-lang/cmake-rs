@@ -383,8 +383,9 @@ impl Config {
         let base = match std::env::var("VisualStudioVersion") {
             Ok(version) => {
                 match &version[..] {
-                    "12.0" => "Visual Studio 12 2013",
+                    "15.0" => "Visual Studio 15",
                     "14.0" => "Visual Studio 14 2015",
+                    "12.0" => "Visual Studio 12 2013",
                     vers => panic!("\n\n\
                         unsupported or unknown VisualStudio version: {}\n\
                         if another version is installed consider running \
@@ -396,7 +397,9 @@ impl Config {
             _ => {
                 // Check for the presense of a specific registry key
                 // that indicates visual studio is installed.
-                if self.has_msbuild_version("14.0") {
+                if self.has_msbuild_version("15.0") {
+                    "Visual Studio 15"
+                } else if self.has_msbuild_version("14.0") {
                     "Visual Studio 14 2015"
                 } else if self.has_msbuild_version("12.0") {
                     "Visual Studio 12 2013"
