@@ -62,6 +62,7 @@ pub struct Config {
     path: PathBuf,
     generator: Option<OsString>,
     cflags: OsString,
+    cxxflags: OsString,
     defines: Vec<(OsString, OsString)>,
     deps: Vec<String>,
     target: Option<String>,
@@ -100,6 +101,7 @@ impl Config {
             path: env::current_dir().unwrap().join(path),
             generator: None,
             cflags: OsString::new(),
+            cxxflags: OsString::new(),
             defines: Vec::new(),
             deps: Vec::new(),
             profile: None,
@@ -117,11 +119,19 @@ impl Config {
         self
     }
 
-    /// Adds a custom flag to pass down to the compiler, supplementing those
+    /// Adds a custom flag to pass down to the C compiler, supplementing those
     /// that this library already passes.
     pub fn cflag<P: AsRef<OsStr>>(&mut self, flag: P) -> &mut Config {
         self.cflags.push(" ");
         self.cflags.push(flag.as_ref());
+        self
+    }
+
+    /// Adds a custom flag to pass down to the C++ compiler, supplementing those
+    /// that this library already passes.
+    pub fn cxxflag<P: AsRef<OsStr>>(&mut self, flag: P) -> &mut Config {
+        self.cxxflags.push(" ");
+        self.cxxflags.push(flag.as_ref());
         self
     }
 
@@ -343,7 +353,7 @@ impl Config {
             };
 
             set_compiler("C", &c_compiler, &self.cflags);
-            set_compiler("CXX", &cxx_compiler, &OsString::new());
+            set_compiler("CXX", &cxx_compiler, &self.cxxflags);
         }
 
         if !self.defined("CMAKE_BUILD_TYPE") {
