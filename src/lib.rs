@@ -314,6 +314,13 @@ impl Config {
             cmd.arg(dstflag);
         }
 
+        let build_type = self.defines.iter().find(|&&(ref a, _)| {
+            a == "CMAKE_BUILD_TYPE"
+        }).map(|x| x.1.to_str().unwrap()).unwrap_or(&profile);
+        let build_type_upcase = build_type.chars()
+                                          .flat_map(|c| c.to_uppercase())
+                                          .collect::<String>();
+
         {
             let mut set_compiler = |kind: &str,
                                     compiler: &gcc::Tool,
@@ -323,6 +330,20 @@ impl Config {
                 if !self.defined(&flag_var) {
                     let mut flagsflag = OsString::from("-D");
                     flagsflag.push(&flag_var);
+                    flagsflag.push("=");
+                    flagsflag.push(extra);
+                    for arg in compiler.args() {
+                        flagsflag.push(" ");
+                        flagsflag.push(arg);
+                    }
+                    cmd.arg(flagsflag);
+                }
+
+                let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind,
+                                           build_type_upcase);
+                if !self.defined(&flag_var_alt) {
+                    let mut flagsflag = OsString::from("-D");
+                    flagsflag.push(&flag_var_alt);
                     flagsflag.push("=");
                     flagsflag.push(extra);
                     for arg in compiler.args() {
@@ -380,7 +401,7 @@ impl Config {
         run(Command::new("cmake")
                     .arg("--build").arg(".")
                     .arg("--target").arg(target)
-                    .arg("--config").arg(profile)
+                    .arg("--config").arg(&profile)
                     .arg("--").args(&self.build_args)
                     .args(&parallel_args)
                     .current_dir(&build), "cmake");
