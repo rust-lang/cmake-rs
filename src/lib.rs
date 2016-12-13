@@ -322,6 +322,15 @@ impl Config {
                                           .collect::<String>();
 
         {
+            // let cmake deal with optimization/debuginfo
+            let skip_arg = |arg: &OsStr| {
+                match arg.to_str() {
+                    Some(s) => {
+                        s.starts_with("-O") || s.starts_with("/O") || s == "-g"
+                    }
+                    None => false,
+                }
+            };
             let mut set_compiler = |kind: &str,
                                     compiler: &gcc::Tool,
                                     extra: &OsString| {
@@ -333,6 +342,9 @@ impl Config {
                     flagsflag.push("=");
                     flagsflag.push(extra);
                     for arg in compiler.args() {
+                        if skip_arg(arg) {
+                            continue
+                        }
                         flagsflag.push(" ");
                         flagsflag.push(arg);
                     }
@@ -347,6 +359,9 @@ impl Config {
                     flagsflag.push("=");
                     flagsflag.push(extra);
                     for arg in compiler.args() {
+                        if skip_arg(arg) {
+                            continue
+                        }
                         flagsflag.push(" ");
                         flagsflag.push(arg);
                     }
