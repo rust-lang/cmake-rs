@@ -387,6 +387,10 @@ impl Config {
             }
         }
 
+        for &(ref k, ref v) in c_compiler.env() {
+            cmd.env(k, v);
+        }
+
         run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
 
         let mut parallel_args = Vec::new();
@@ -398,13 +402,16 @@ impl Config {
 
         // And build!
         let target = self.cmake_target.clone().unwrap_or("install".to_string());
-        run(Command::new("cmake")
-                    .arg("--build").arg(".")
-                    .arg("--target").arg(target)
-                    .arg("--config").arg(&profile)
-                    .arg("--").args(&self.build_args)
-                    .args(&parallel_args)
-                    .current_dir(&build), "cmake");
+        let mut cmd = Command::new("cmake");
+        for &(ref k, ref v) in c_compiler.env() {
+            cmd.env(k, v);
+        }
+        run(cmd.arg("--build").arg(".")
+               .arg("--target").arg(target)
+               .arg("--config").arg(&profile)
+               .arg("--").args(&self.build_args)
+               .args(&parallel_args)
+               .current_dir(&build), "cmake");
 
         println!("cargo:root={}", dst.display());
         return dst
