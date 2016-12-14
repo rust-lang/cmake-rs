@@ -351,21 +351,30 @@ impl Config {
                     cmd.arg(flagsflag);
                 }
 
-                let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind,
-                                           build_type_upcase);
-                if !self.defined(&flag_var_alt) {
-                    let mut flagsflag = OsString::from("-D");
-                    flagsflag.push(&flag_var_alt);
-                    flagsflag.push("=");
-                    flagsflag.push(extra);
-                    for arg in compiler.args() {
-                        if skip_arg(arg) {
-                            continue
+                // The visual studio generator apparently doesn't respect
+                // `CMAKE_C_FLAGS` but does respect `CMAKE_C_FLAGS_RELEASE` and
+                // such. We need to communicate /MD vs /MT, so set those vars
+                // here.
+                //
+                // Note that for other generators, though, this *overrides*
+                // things like the optimization flags, which is bad.
+                if self.generator.is_none() && msvc {
+                    let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind,
+                                               build_type_upcase);
+                    if !self.defined(&flag_var_alt) {
+                        let mut flagsflag = OsString::from("-D");
+                        flagsflag.push(&flag_var_alt);
+                        flagsflag.push("=");
+                        flagsflag.push(extra);
+                        for arg in compiler.args() {
+                            if skip_arg(arg) {
+                                continue
+                            }
+                            flagsflag.push(" ");
+                            flagsflag.push(arg);
                         }
-                        flagsflag.push(" ");
-                        flagsflag.push(arg);
+                        cmd.arg(flagsflag);
                     }
-                    cmd.arg(flagsflag);
                 }
 
                 // Apparently cmake likes to have an absolute path to the
