@@ -285,6 +285,7 @@ impl Config {
         } else if msvc {
             // If we're on MSVC we need to be sure to use the right generator or
             // otherwise we won't get 32/64 bit correct automatically.
+            // This also guarantees that NMake generator isn't chosen implicitly.
             if self.generator.is_none() {
                 cmd.arg("-G").arg(self.visual_studio_generator(&target));
             }
@@ -418,9 +419,21 @@ impl Config {
         run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
 
         let mut parallel_args = Vec::new();
-        if fs::metadata(&dst.join("build/Makefile")).is_ok() {
-            if let Ok(s) = env::var("NUM_JOBS") {
-                parallel_args.push(format!("-j{}", s));
+        if let Ok(s) = env::var("NUM_JOBS") {
+            match self.generator.as_ref().map(|g| g.to_string_lossy()) {
+                Some(ref g) if g.contains("Ninja") => {
+                    parallel_args.push(format!("-j{}", s));
+                }
+                Some(ref g) if g.contains("Visual Studio") => {
+                    parallel_args.push(format!("/m:{}", s));
+                }
+                Some(ref g) if g.contains("NMake") => {
+                    // NMake creates `Makefile`s, but doesn't understand `-jN`.
+                }
+                _ => if fs::metadata(&dst.join("build/Makefile")).is_ok() {
+                    // This looks like `make`, let's hope it understands `-jN`.
+                    parallel_args.push(format!("-j{}", s));
+                }
             }
         }
 
