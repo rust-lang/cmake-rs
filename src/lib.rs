@@ -527,10 +527,6 @@ impl Config {
         // isn't relevant to us but we canonicalize it here to ensure
         // we're both checking the same thing.
         let path = fs::canonicalize(&self.path).unwrap_or(self.path.clone());
-        let src = match path.to_str() {
-            Some(src) => src,
-            None => return,
-        };
         let mut f = match File::open(dir.join("CMakeCache.txt")) {
             Ok(f) => f,
             Err(..) => return,
@@ -543,10 +539,21 @@ impl Config {
         let contents = String::from_utf8_lossy(&u8contents);
         drop(f);
         for line in contents.lines() {
-            if line.contains("CMAKE_HOME_DIRECTORY") && !line.contains(src) {
-                println!("detected home dir change, cleaning out entire build \
-                          directory");
-                fs::remove_dir_all(dir).unwrap();
+            if line.starts_with("CMAKE_HOME_DIRECTORY") {
+                let needs_cleanup = match line.split('=').next_back() {
+                    Some(cmake_home) => {
+                        fs::canonicalize(cmake_home)
+                            .ok()
+                            .map(|cmake_home| cmake_home != path)
+                            .unwrap_or(true)
+                    },
+                    None => true
+                };
+                if needs_cleanup {
+                    println!("detected home dir change, cleaning out entire build \
+                              directory");
+                    fs::remove_dir_all(dir).unwrap();
+                }
                 break
             }
         }
