@@ -17,13 +17,9 @@ pub struct RegistryKey(Repr);
 
 type HKEY = *mut u8;
 type DWORD = u32;
-type LPDWORD = *mut DWORD;
 type LPCWSTR = *const u16;
-type LPWSTR = *mut u16;
 type LONG = raw::c_long;
 type PHKEY = *mut HKEY;
-type PFILETIME = *mut u8;
-type LPBYTE = *mut u8;
 type REGSAM = u32;
 
 const ERROR_SUCCESS: DWORD = 0;
