@@ -290,8 +290,10 @@ impl Config {
                 cmd.arg("-G").arg(self.visual_studio_generator(&target));
             }
         }
+        let mut is_ninja = false;
         if let Some(ref generator) = self.generator {
             cmd.arg("-G").arg(generator);
+            is_ninja = generator.to_string_lossy().contains("Ninja");
         }
         let profile = self.profile.clone().unwrap_or_else(|| {
             match &getenv_unwrap("PROFILE")[..] {
@@ -385,15 +387,25 @@ impl Config {
                 // what's up, but at least this means cmake doesn't get
                 // confused?
                 //
-                // Also don't specify this on Windows as it's not needed for
-                // MSVC and for MinGW it doesn't really vary.
+                // Also specify this on Windows only if we use MSVC with Ninja,
+                // as it's not needed for MSVC with Visual Studio generators and
+                // for MinGW it doesn't really vary.
                 if !self.defined("CMAKE_TOOLCHAIN_FILE")
                    && !self.defined(&tool_var)
-                   && env::consts::FAMILY != "windows" {
+                   && (env::consts::FAMILY != "windows" || (msvc && is_ninja)) {
                     let mut ccompiler = OsString::from("-D");
                     ccompiler.push(&tool_var);
                     ccompiler.push("=");
                     ccompiler.push(find_exe(compiler.path()));
+                    #[cfg(windows)] {
+                        // CMake doesn't like unescaped `\`s in compiler paths
+                        // so we either have to escape them or replace with `/`s.
+                        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+                        let wchars = ccompiler.encode_wide().map(|wchar| {
+                            if wchar == b'\\' as u16 { '/' as u16 } else { wchar }
+                        }).collect::<Vec<_>>();
+                        ccompiler = OsString::from_wide(&wchars);
+                    }
                     cmd.arg(ccompiler);
                 }
             };
