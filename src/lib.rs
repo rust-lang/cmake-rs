@@ -71,6 +71,7 @@ pub struct Config {
     profile: Option<String>,
     build_args: Vec<OsString>,
     cmake_target: Option<String>,
+    env: Vec<(OsString, OsString)>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -110,6 +111,7 @@ impl Config {
             host: None,
             build_args: Vec::new(),
             cmake_target: None,
+            env: Vec::new(),
         }
     }
 
@@ -192,6 +194,16 @@ impl Config {
     /// Add an argument to the final `cmake` build step
     pub fn build_arg<A: AsRef<OsStr>>(&mut self, arg: A) -> &mut Config {
         self.build_args.push(arg.as_ref().to_owned());
+        self
+    }
+
+    /// Configure an environment variable for the `cmake` processes spawned by
+    /// this crate in the `build` step.
+    pub fn env<K, V>(&mut self, key: K, value: V) -> &mut Config
+        where K: AsRef<OsStr>,
+              V: AsRef<OsStr>,
+    {
+        self.env.push((key.as_ref().to_owned(), value.as_ref().to_owned()));
         self
     }
 
@@ -424,7 +436,7 @@ impl Config {
             }
         }
 
-        for &(ref k, ref v) in c_compiler.env() {
+        for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
         }
 
@@ -452,7 +464,7 @@ impl Config {
         // And build!
         let target = self.cmake_target.clone().unwrap_or("install".to_string());
         let mut cmd = Command::new("cmake");
-        for &(ref k, ref v) in c_compiler.env() {
+        for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
         }
         run(cmd.arg("--build").arg(".")
