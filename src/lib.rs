@@ -69,6 +69,7 @@ pub struct Config {
     host: Option<String>,
     out_dir: Option<PathBuf>,
     profile: Option<String>,
+    cmake_args: Vec<OsString>,
     build_args: Vec<OsString>,
     cmake_target: Option<String>,
     env: Vec<(OsString, OsString)>,
@@ -109,6 +110,7 @@ impl Config {
             out_dir: None,
             target: None,
             host: None,
+            cmake_args: Vec::new(),
             build_args: Vec::new(),
             cmake_target: None,
             env: Vec::new(),
@@ -191,7 +193,24 @@ impl Config {
         self
     }
 
-    /// Add an argument to the final `cmake` build step
+    /// Adds an argument to be passed to `cmake`.
+    pub fn cmake_arg<A: AsRef<OsStr>>(&mut self, arg: A) -> &mut Config {
+        self.cmake_args.push(arg.as_ref().to_owned());
+        self
+    }
+
+    /// Adds multiple arguments to be passed to `cmake`.
+    pub fn cmake_args<I, A>(&mut self, args: I) -> &mut Config
+        where I: IntoIterator<Item = A>,
+              A: AsRef<OsStr>
+    {
+        for arg in args {
+            self.cmake_arg(arg.as_ref());
+        }
+        self
+    }
+
+    /// Adds an argument to be passed to the native build tool run by `cmake`.
     pub fn build_arg<A: AsRef<OsStr>>(&mut self, arg: A) -> &mut Config {
         self.build_args.push(arg.as_ref().to_owned());
         self
@@ -467,7 +486,8 @@ impl Config {
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
         }
-        run(cmd.arg("--build").arg(".")
+        run(cmd.args(&self.cmake_args)
+               .arg("--build").arg(".")
                .arg("--target").arg(target)
                .arg("--config").arg(&profile)
                .arg("--").args(&self.build_args)
