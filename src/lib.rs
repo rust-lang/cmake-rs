@@ -310,8 +310,6 @@ impl Config {
         let profile = self.profile.clone().unwrap_or_else(|| {
             match &getenv_unwrap("PROFILE")[..] {
                 "bench" | "release" => "Release",
-                // currently we need to always use the same CRT for MSVC
-                _ if msvc => "Release",
                 _ => "Debug",
             }.to_string()
         });
