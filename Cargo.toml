@@ -14,4 +14,4 @@ A build dependency for running `cmake` to build a native library
 """
 
 [dependencies]
-gcc = "0.3.17"
+gcc = "0.3.46"
