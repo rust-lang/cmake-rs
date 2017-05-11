@@ -237,21 +237,26 @@ impl Config {
             getenv_unwrap("HOST")
         });
         let msvc = target.contains("msvc");
-        let c_compiler = gcc::Config::new().cargo_metadata(false)
-                                         .opt_level(0)
-                                         .debug(false)
-                                         .target(&target)
-                                         .host(&host)
-                                         .static_crt(self.static_crt.unwrap_or(false))
-                                         .get_compiler();
-        let cxx_compiler = gcc::Config::new().cargo_metadata(false)
-                                         .cpp(true)
-                                         .opt_level(0)
-                                         .debug(false)
-                                         .target(&target)
-                                         .host(&host)
-                                         .static_crt(self.static_crt.unwrap_or(false))
-                                         .get_compiler();
+        let mut c_cfg = gcc::Config::new();
+        c_cfg.cargo_metadata(false)
+            .opt_level(0)
+            .debug(false)
+            .target(&target)
+            .host(&host);
+        let mut cxx_cfg = gcc::Config::new();
+        cxx_cfg.cargo_metadata(false)
+            .cpp(true)
+            .opt_level(0)
+            .debug(false)
+            .target(&target)
+            .host(&host);
+        if let Some(static_crt) = self.static_crt {
+            c_cfg.static_crt(static_crt);
+            cxx_cfg.static_crt(static_crt);
+        }
+
+        let c_compiler = gcc::Config::new().get_compiler();
+        let cxx_compiler = gcc::Config::new().get_compiler();
 
         let dst = self.out_dir.clone().unwrap_or_else(|| {
             PathBuf::from(getenv_unwrap("OUT_DIR"))
