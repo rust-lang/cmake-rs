@@ -72,6 +72,7 @@ pub struct Config {
     build_args: Vec<OsString>,
     cmake_target: Option<String>,
     env: Vec<(OsString, OsString)>,
+    static_crt: Option<bool>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -112,6 +113,7 @@ impl Config {
             build_args: Vec::new(),
             cmake_target: None,
             env: Vec::new(),
+            static_crt: None,
         }
     }
 
@@ -191,6 +193,14 @@ impl Config {
         self
     }
 
+    /// Configures whether the /MT flag or the /MD flag will be passed to msvc build tools.
+    ///
+    /// This option defaults to `false`, and affect only msvc targets.
+    pub fn static_crt(&mut self, static_crt: bool) -> &mut Config {
+        self.static_crt = Some(static_crt);
+        self
+    }
+
     /// Add an argument to the final `cmake` build step
     pub fn build_arg<A: AsRef<OsStr>>(&mut self, arg: A) -> &mut Config {
         self.build_args.push(arg.as_ref().to_owned());
@@ -227,19 +237,25 @@ impl Config {
             getenv_unwrap("HOST")
         });
         let msvc = target.contains("msvc");
-        let c_compiler = gcc::Config::new().cargo_metadata(false)
-                                         .opt_level(0)
-                                         .debug(false)
-                                         .target(&target)
-                                         .host(&host)
-                                         .get_compiler();
-        let cxx_compiler = gcc::Config::new().cargo_metadata(false)
-                                         .cpp(true)
-                                         .opt_level(0)
-                                         .debug(false)
-                                         .target(&target)
-                                         .host(&host)
-                                         .get_compiler();
+        let mut c_cfg = gcc::Config::new();
+        c_cfg.cargo_metadata(false)
+            .opt_level(0)
+            .debug(false)
+            .target(&target)
+            .host(&host);
+        let mut cxx_cfg = gcc::Config::new();
+        cxx_cfg.cargo_metadata(false)
+            .cpp(true)
+            .opt_level(0)
+            .debug(false)
+            .target(&target)
+            .host(&host);
+        if let Some(static_crt) = self.static_crt {
+            c_cfg.static_crt(static_crt);
+            cxx_cfg.static_crt(static_crt);
+        }
+        let c_compiler = c_cfg.get_compiler();
+        let cxx_compiler = cxx_cfg.get_compiler();
 
         let dst = self.out_dir.clone().unwrap_or_else(|| {
             PathBuf::from(getenv_unwrap("OUT_DIR"))
