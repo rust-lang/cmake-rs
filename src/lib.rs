@@ -254,9 +254,8 @@ impl Config {
             c_cfg.static_crt(static_crt);
             cxx_cfg.static_crt(static_crt);
         }
-
-        let c_compiler = gcc::Config::new().get_compiler();
-        let cxx_compiler = gcc::Config::new().get_compiler();
+        let c_compiler = c_cfg.get_compiler();
+        let cxx_compiler = cxx_cfg.get_compiler();
 
         let dst = self.out_dir.clone().unwrap_or_else(|| {
             PathBuf::from(getenv_unwrap("OUT_DIR"))
