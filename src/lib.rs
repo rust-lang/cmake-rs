@@ -496,6 +496,9 @@ impl Config {
             Ok(VsVers::Vs15) => "Visual Studio 15 2017",
             Ok(VsVers::Vs14) => "Visual Studio 14 2015",
             Ok(VsVers::Vs12) => "Visual Studio 12 2013",
+            Ok(_) => panic!("Visual studio version detected but this crate \
+                             doesn't know how to generate cmake files for it, \
+                             can the `cmake` crate be updated?"),
             Err(msg) => panic!(msg),
         };
         if target.contains("i686") {
