@@ -54,9 +54,6 @@ use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-#[cfg(windows)]
-mod registry;
-
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
     path: PathBuf,
@@ -493,40 +490,14 @@ impl Config {
     }
 
     fn visual_studio_generator(&self, target: &str) -> String {
-        let base = match std::env::var("VisualStudioVersion") {
-            Ok(version) => {
-                match &version[..] {
-                    "15.0" => "Visual Studio 15",
-                    "14.0" => "Visual Studio 14 2015",
-                    "12.0" => "Visual Studio 12 2013",
-                    vers => panic!("\n\n\
-                        unsupported or unknown VisualStudio version: {}\n\
-                        if another version is installed consider running \
-                        the appropriate vcvars script before building this \
-                        crate\n\
-                    ", vers),
-                }
-            }
-            _ => {
-                // Check for the presense of a specific registry key
-                // that indicates visual studio is installed.
-                if self.has_msbuild_version("15.0") {
-                    "Visual Studio 15"
-                } else if self.has_msbuild_version("14.0") {
-                    "Visual Studio 14 2015"
-                } else if self.has_msbuild_version("12.0") {
-                    "Visual Studio 12 2013"
-                } else {
-                    panic!("\n\n\
-                        couldn't determine visual studio generator\n\
-                        if VisualStudio is installed, however, consider \
-                        running the appropriate vcvars script before building \
-                        this crate\n\
-                    ");
-                }
-            }
-        };
+        use gcc::windows_registry::{find_vs_version, VsVers};
 
+        let base = match find_vs_version() {
+            Ok(VsVers::Vs15) => "Visual Studio 15 2017",
+            Ok(VsVers::Vs14) => "Visual Studio 14 2015",
+            Ok(VsVers::Vs12) => "Visual Studio 12 2013",
+            Err(msg) => panic!(msg),
+        };
         if target.contains("i686") {
             base.to_string()
         } else if target.contains("x86_64") {
@@ -534,18 +505,6 @@ impl Config {
         } else {
             panic!("unsupported msvc target: {}", target);
         }
-    }
-
-    #[cfg(not(windows))]
-    fn has_msbuild_version(&self, _version: &str) -> bool {
-        false
-    }
-
-    #[cfg(windows)]
-    fn has_msbuild_version(&self, version: &str) -> bool {
-        let key = format!("SOFTWARE\\Microsoft\\MSBuild\\ToolsVersions\\{}",
-                          version);
-        registry::LOCAL_MACHINE.open(key.as_ref()).is_ok()
     }
 
     fn defined(&self, var: &str) -> bool {
