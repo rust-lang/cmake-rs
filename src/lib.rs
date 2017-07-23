@@ -314,6 +314,10 @@ impl Config {
             if self.generator.is_none() {
                 cmd.arg("-G").arg(self.visual_studio_generator(&target));
             }
+        } else if target.contains("redox") {
+            if !self.defined("CMAKE_SYSTEM_NAME") {
+                cmd.arg("-DCMAKE_SYSTEM_NAME=Generic");
+            }
         }
         let mut is_ninja = false;
         if let Some(ref generator) = self.generator {
