@@ -234,18 +234,20 @@ impl Config {
             getenv_unwrap("HOST")
         });
         let msvc = target.contains("msvc");
-        let mut c_cfg = gcc::Config::new();
+        let mut c_cfg = gcc::Build::new();
         c_cfg.cargo_metadata(false)
             .opt_level(0)
             .debug(false)
             .target(&target)
+            .warnings(false)
             .host(&host);
-        let mut cxx_cfg = gcc::Config::new();
+        let mut cxx_cfg = gcc::Build::new();
         cxx_cfg.cargo_metadata(false)
             .cpp(true)
             .opt_level(0)
             .debug(false)
             .target(&target)
+            .warnings(false)
             .host(&host);
         if let Some(static_crt) = self.static_crt {
             c_cfg.static_crt(static_crt);
