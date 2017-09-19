@@ -44,7 +44,7 @@
 
 #![deny(missing_docs)]
 
-extern crate gcc;
+extern crate cc;
 
 use std::env;
 use std::ffi::{OsString, OsStr};
@@ -234,14 +234,14 @@ impl Config {
             getenv_unwrap("HOST")
         });
         let msvc = target.contains("msvc");
-        let mut c_cfg = gcc::Build::new();
+        let mut c_cfg = cc::Build::new();
         c_cfg.cargo_metadata(false)
             .opt_level(0)
             .debug(false)
             .target(&target)
             .warnings(false)
             .host(&host);
-        let mut cxx_cfg = gcc::Build::new();
+        let mut cxx_cfg = cc::Build::new();
         cxx_cfg.cargo_metadata(false)
             .cpp(true)
             .opt_level(0)
@@ -364,7 +364,7 @@ impl Config {
                 }
             };
             let mut set_compiler = |kind: &str,
-                                    compiler: &gcc::Tool,
+                                    compiler: &cc::Tool,
                                     extra: &OsString| {
                 let flag_var = format!("CMAKE_{}_FLAGS", kind);
                 let tool_var = format!("CMAKE_{}_COMPILER", kind);
@@ -496,7 +496,7 @@ impl Config {
     }
 
     fn visual_studio_generator(&self, target: &str) -> String {
-        use gcc::windows_registry::{find_vs_version, VsVers};
+        use cc::windows_registry::{find_vs_version, VsVers};
 
         let base = match find_vs_version() {
             Ok(VsVers::Vs15) => "Visual Studio 15 2017",
