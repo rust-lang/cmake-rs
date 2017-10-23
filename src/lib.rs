@@ -70,6 +70,7 @@ pub struct Config {
     cmake_target: Option<String>,
     env: Vec<(OsString, OsString)>,
     static_crt: Option<bool>,
+    uses_cxx11: bool,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -111,6 +112,7 @@ impl Config {
             cmake_target: None,
             env: Vec::new(),
             static_crt: None,
+            uses_cxx11: false
         }
     }
 
@@ -221,15 +223,33 @@ impl Config {
         self
     }
 
+    /// Alters the default target triple on OSX to ensure that c++11 is
+    /// available. Does not change the target triple if it is explicitly
+    /// specified.
+    ///
+    /// This does not otherwise affect any CXX flags, i.e. it does not set
+    /// -std=c++11 or -stdlib=libc++.
+    pub fn uses_cxx11(&mut self) -> &mut Config {
+        self.uses_cxx11 = true;
+        self
+    }
+
     /// Run this configuration, compiling the library with all the configured
     /// options.
     ///
     /// This will run both the build system generator command as well as the
     /// command to build the library.
     pub fn build(&mut self) -> PathBuf {
-        let target = self.target.clone().unwrap_or_else(|| {
-            getenv_unwrap("TARGET")
-        });
+        let target = match self.target.clone() {
+            Some(t) => t,
+            None => {
+                let mut t = getenv_unwrap("TARGET");
+                if t.ends_with("-darwin") && self.uses_cxx11 {
+                    t = t + "11"
+                }
+                t
+            }
+        };
         let host = self.host.clone().unwrap_or_else(|| {
             getenv_unwrap("HOST")
         });
