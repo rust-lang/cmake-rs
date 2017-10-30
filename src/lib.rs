@@ -488,13 +488,13 @@ impl Config {
                 Some(ref g) if g.contains("Visual Studio") => {
                     parallel_args.push(format!("/m:{}", s));
                 }
-                Some(ref g) if g.contains("NMake") => {
-                    // NMake creates `Makefile`s, but doesn't understand `-jN`.
-                }
-                _ => if fs::metadata(&dst.join("build/Makefile")).is_ok() {
-                    // This looks like `make`, let's hope it understands `-jN`.
-                    parallel_args.push(format!("-j{}", s));
-                }
+                _ => {},
+            }
+        }
+        let mut makeflags = None;
+        if !cfg!(windows) && fs::metadata(&dst.join("build/Makefile")).is_ok() {
+            if let Ok(s) = env::var("CARGO_MAKEFLAGS") {
+                makeflags = Some(s);
             }
         }
 
@@ -503,6 +503,9 @@ impl Config {
         let mut cmd = Command::new("cmake");
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
+        }
+        if let Some(flags) = makeflags {
+            cmd.env("MAKEFLAGS", flags);
         }
         run(cmd.arg("--build").arg(".")
                .arg("--target").arg(target)
