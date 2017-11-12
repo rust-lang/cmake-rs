@@ -479,6 +479,7 @@ impl Config {
 
         run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
 
+        let mut makeflags = None;
         let mut parallel_args = Vec::new();
         if let Ok(s) = env::var("NUM_JOBS") {
             match self.generator.as_ref().map(|g| g.to_string_lossy()) {
@@ -487,14 +488,18 @@ impl Config {
                 }
                 Some(ref g) if g.contains("Visual Studio") => {
                     parallel_args.push(format!("/m:{}", s));
+				}
+				Some(ref g) if g.contains("NMake") => {
+					// NMake creates `Makefile`s, but doesn't understand `-jN`.
+				}
+                _ if fs::metadata(&dst.join("build/Makefile")).is_ok() => {
+                    match env::var_os("CARGO_MAKEFLAGS") {
+                        Some(s) => makeflags = Some(s),
+                        // This looks like `make`, let's hope it understands `-jN`.
+                        None => parallel_args.push(format!("-j{}", s)),
+                    }
                 }
-                _ => {},
-            }
-        }
-        let mut makeflags = None;
-        if !cfg!(windows) && fs::metadata(&dst.join("build/Makefile")).is_ok() {
-            if let Ok(s) = env::var("CARGO_MAKEFLAGS") {
-                makeflags = Some(s);
+                _ => {}
             }
         }
 
