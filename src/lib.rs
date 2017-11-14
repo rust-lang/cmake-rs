@@ -497,7 +497,7 @@ impl Config {
                         // Only do this on non-windows as we could actually be
                         // invoking make instead of mingw32-make which doesn't
                         // work with our jobserver
-                        Some(s) _ if !cfg!(windows) => makeflags = Some(s),
+                        Some(ref s) if !cfg!(windows) => makeflags = Some(s.clone()),
 
                         // This looks like `make`, let's hope it understands `-jN`.
                         _ => parallel_args.push(format!("-j{}", s)),
