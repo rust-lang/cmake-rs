@@ -494,9 +494,13 @@ impl Config {
 				}
                 _ if fs::metadata(&dst.join("build/Makefile")).is_ok() => {
                     match env::var_os("CARGO_MAKEFLAGS") {
-                        Some(s) => makeflags = Some(s),
+                        // Only do this on non-windows as we could actually be
+                        // invoking make instead of mingw32-make which doesn't
+                        // work with our jobserver
+                        Some(s) _ if !cfg!(windows) => makeflags = Some(s),
+
                         // This looks like `make`, let's hope it understands `-jN`.
-                        None => parallel_args.push(format!("-j{}", s)),
+                        _ => parallel_args.push(format!("-j{}", s)),
                     }
                 }
                 _ => {}
