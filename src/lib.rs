@@ -297,7 +297,8 @@ impl Config {
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
-        let mut cmd = Command::new("cmake");
+        let executable = env::var("CMAKE").unwrap_or("cmake".to_owned());
+        let mut cmd = Command::new(executable);
         cmd.arg(&self.path)
            .current_dir(&build);
         if target.contains("windows-gnu") {

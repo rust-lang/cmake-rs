@@ -13,6 +13,9 @@ library.
 cmake = "0.2"
 ```
 
+The CMake executable is assumed to be `cmake` unless the `CMAKE`
+environmental variable is set.
+
 # License
 
 This project is licensed under either of
