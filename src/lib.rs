@@ -341,6 +341,10 @@ impl Config {
             if !self.defined("CMAKE_SYSTEM_NAME") {
                 cmd.arg("-DCMAKE_SYSTEM_NAME=Generic");
             }
+        } else if target.contains("solaris") {
+            if !self.defined("CMAKE_SYSTEM_NAME") {
+                cmd.arg("-DCMAKE_SYSTEM_NAME=SunOS");
+            }
         }
         let mut is_ninja = false;
         if let Some(ref generator) = self.generator {
