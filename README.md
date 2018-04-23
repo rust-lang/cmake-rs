@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/alexcrichton/cmake-rs.svg?branch=master)](https://travis-ci.org/alexcrichton/cmake-rs)
 
-[Documentation](http://alexcrichton.com/cmake-rs)
+[Documentation](https://docs.rs/cmake)
 
 A build dependency for running the `cmake` build tool to compile a native
 library.
