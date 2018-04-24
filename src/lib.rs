@@ -493,10 +493,10 @@ impl Config {
                 }
                 Some(ref g) if g.contains("Visual Studio") => {
                     parallel_args.push(format!("/m:{}", s));
-				}
-				Some(ref g) if g.contains("NMake") => {
-					// NMake creates `Makefile`s, but doesn't understand `-jN`.
-				}
+                }
+                Some(ref g) if g.contains("NMake") => {
+                    // NMake creates `Makefile`s, but doesn't understand `-jN`.
+                }
                 _ if fs::metadata(&dst.join("build/Makefile")).is_ok() => {
                     match env::var_os("CARGO_MAKEFLAGS") {
                         // Only do this on non-windows and non-bsd
