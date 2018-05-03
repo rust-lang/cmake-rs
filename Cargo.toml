@@ -7,7 +7,7 @@ readme = "README.md"
 keywords = ["build-dependencies"]
 repository = "https://github.com/alexcrichton/cmake-rs"
 homepage = "https://github.com/alexcrichton/cmake-rs"
-documentation = "http://alexcrichton.com/cmake-rs"
+documentation = "https://docs.rs/cmake"
 description = """
 A build dependency for running `cmake` to build a native library
 """
