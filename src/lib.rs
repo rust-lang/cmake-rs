@@ -310,9 +310,9 @@ impl Config {
                     // If make.exe isn't found, that means we may be using a MinGW
                     // toolchain instead of a MSYS2 toolchain. If neither is found,
                     // the build cannot continue.
-                    let has_msys2 = Command::new("make").spawn().err()
+                    let has_msys2 = Command::new("make").arg("--version").output().err()
                         .map(|e| e.kind() != ErrorKind::NotFound).unwrap_or(true);
-                    let has_mingw32 = Command::new("mingw32-make").spawn().err()
+                    let has_mingw32 = Command::new("mingw32-make").arg("--version").output().err()
                         .map(|e| e.kind() != ErrorKind::NotFound).unwrap_or(true);
 
                     let generator = match (has_msys2, has_mingw32) {
