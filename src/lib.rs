@@ -71,6 +71,7 @@ pub struct Config {
     env: Vec<(OsString, OsString)>,
     static_crt: Option<bool>,
     uses_cxx11: bool,
+    always_configure: bool,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -112,7 +113,8 @@ impl Config {
             cmake_target: None,
             env: Vec::new(),
             static_crt: None,
-            uses_cxx11: false
+            uses_cxx11: false,
+            always_configure: true,
         }
     }
 
@@ -231,6 +233,15 @@ impl Config {
     /// -std=c++11 or -stdlib=libc++.
     pub fn uses_cxx11(&mut self) -> &mut Config {
         self.uses_cxx11 = true;
+        self
+    }
+
+    /// Forces CMake to always run before building the custom target.
+    ///
+    /// In some cases, when you have a big project, you can disable
+    /// subsequents runs of cmake to make `cargo build` faster.
+    pub fn always_configure(&mut self) -> &mut Config {
+        self.always_configure = true;
         self
     }
 
@@ -496,7 +507,10 @@ impl Config {
             cmd.env(k, v);
         }
 
-        run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
+        if self.always_configure || !build.join("CMakeCache.txt").exists() {
+            println!("CMake project was already configured. Skipping configuration step.");
+            run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
+        }
 
         let mut makeflags = None;
         let mut parallel_args = Vec::new();
