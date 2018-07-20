@@ -240,8 +240,8 @@ impl Config {
     ///
     /// In some cases, when you have a big project, you can disable
     /// subsequents runs of cmake to make `cargo build` faster.
-    pub fn always_configure(&mut self) -> &mut Config {
-        self.always_configure = true;
+    pub fn always_configure(&mut self, always_configure: bool) -> &mut Config {
+        self.always_configure = always_configure;
         self
     }
 
