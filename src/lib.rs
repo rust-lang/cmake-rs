@@ -297,6 +297,7 @@ impl Config {
         // Add all our dependencies to our cmake paths
         let mut cmake_prefix_path = Vec::new();
         for dep in &self.deps {
+            let dep = dep.to_uppercase().replace('-', "_");
             if let Some(root) = env::var_os(&format!("DEP_{}_ROOT", dep)) {
                 cmake_prefix_path.push(PathBuf::from(root));
             }
