@@ -170,8 +170,8 @@ impl Config {
     }
 
     /// Disables the target option for this compilation.
-    pub fn no_build_target(&mut self) -> &mut Config {
-        self.no_build_target = true;
+    pub fn no_build_target(&mut self, no_build_target: bool) -> &mut Config {
+        self.no_build_target = no_build_target;
         self
     }
 
