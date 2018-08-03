@@ -566,12 +566,13 @@ impl Config {
             cmd.env("MAKEFLAGS", flags);
         }
 
+        cmd.arg("--build").arg(".");
+
         if !self.no_build_target {
             cmd.arg("--target").arg(target);
         }
 
-        run(cmd.arg("--build").arg(".")
-               .arg("--config").arg(&profile)
+        run(cmd.arg("--config").arg(&profile)
                .arg("--").args(&self.build_args)
                .args(&parallel_args)
                .current_dir(&build), "cmake");
