@@ -72,6 +72,7 @@ pub struct Config {
     static_crt: Option<bool>,
     uses_cxx11: bool,
     always_configure: bool,
+    no_build_target: bool,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -115,6 +116,7 @@ impl Config {
             static_crt: None,
             uses_cxx11: false,
             always_configure: true,
+            no_build_target: false,
         }
     }
 
@@ -164,6 +166,12 @@ impl Config {
     /// build scripts so it's not necessary to call this from a build script.
     pub fn target(&mut self, target: &str) -> &mut Config {
         self.target = Some(target.to_string());
+        self
+    }
+
+    /// Disables the target option for this compilation.
+    pub fn no_build_target(&mut self, no_build_target: bool) -> &mut Config {
+        self.no_build_target = no_build_target;
         self
     }
 
@@ -557,9 +565,14 @@ impl Config {
         if let Some(flags) = makeflags {
             cmd.env("MAKEFLAGS", flags);
         }
-        run(cmd.arg("--build").arg(".")
-               .arg("--target").arg(target)
-               .arg("--config").arg(&profile)
+
+        cmd.arg("--build").arg(".");
+
+        if !self.no_build_target {
+            cmd.arg("--target").arg(target);
+        }
+
+        run(cmd.arg("--config").arg(&profile)
                .arg("--").args(&self.build_args)
                .args(&parallel_args)
                .current_dir(&build), "cmake");
