@@ -517,8 +517,9 @@ impl Config {
         }
 
         if self.always_configure || !build.join("CMakeCache.txt").exists() {
-            println!("CMake project was already configured. Skipping configuration step.");
             run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
+        } else {
+            println!("CMake project was already configured. Skipping configuration step.");
         }
 
         let mut makeflags = None;
