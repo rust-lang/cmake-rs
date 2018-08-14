@@ -10,7 +10,7 @@ library.
 ```toml
 # Cargo.toml
 [build-dependencies]
-cmake = "0.2"
+cmake = "0.1"
 ```
 
 The CMake executable is assumed to be `cmake` unless the `CMAKE`
