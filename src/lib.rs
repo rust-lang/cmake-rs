@@ -73,6 +73,8 @@ pub struct Config {
     uses_cxx11: bool,
     always_configure: bool,
     no_build_target: bool,
+    verbose_cmake: bool,
+    verbose_make: bool,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -117,6 +119,8 @@ impl Config {
             uses_cxx11: false,
             always_configure: true,
             no_build_target: false,
+            verbose_cmake: false,
+            verbose_make: false,
         }
     }
 
@@ -253,6 +257,13 @@ impl Config {
         self
     }
 
+    /// Sets very verbose output.
+    pub fn very_verbose(&mut self, value: bool) -> &mut Config {
+        self.verbose_cmake = value;
+        self.verbose_make = value;
+        self
+    }
+
     /// Run this configuration, compiling the library with all the configured
     /// options.
     ///
@@ -319,6 +330,12 @@ impl Config {
         // Build up the first cmake command to build the build system.
         let executable = env::var("CMAKE").unwrap_or("cmake".to_owned());
         let mut cmd = Command::new(executable);
+
+        if self.verbose_cmake {
+            cmd.arg("-Wdev");
+            cmd.arg("--debug-output");
+        }
+
         cmd.arg(&self.path)
            .current_dir(&build);
         if target.contains("windows-gnu") {
@@ -506,6 +523,10 @@ impl Config {
             cmd.arg(&format!("-DCMAKE_BUILD_TYPE={}", profile));
         }
 
+        if self.verbose_make {
+            cmd.arg("-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON");
+        }
+
         if !self.defined("CMAKE_TOOLCHAIN_FILE") {
             if let Ok(s) = env::var("CMAKE_TOOLCHAIN_FILE") {
                 cmd.arg(&format!("-DCMAKE_TOOLCHAIN_FILE={}", s));
@@ -571,11 +592,12 @@ impl Config {
         if !self.no_build_target {
             cmd.arg("--target").arg(target);
         }
+        cmd.arg("--config").arg(&profile)
+            .arg("--").args(&self.build_args)
+            .args(&parallel_args)
+            .current_dir(&build);
 
-        run(cmd.arg("--config").arg(&profile)
-               .arg("--").args(&self.build_args)
-               .args(&parallel_args)
-               .current_dir(&build), "cmake");
+        run(&mut cmd, "cmake");
 
         println!("cargo:root={}", dst.display());
         return dst
