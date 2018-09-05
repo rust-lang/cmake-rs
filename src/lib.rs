@@ -394,6 +394,9 @@ impl Config {
             if self.generator.is_none() {
                 cmd.arg("-G").arg(self.visual_studio_generator(&target));
             }
+            if target.contains("x86_64") {
+                cmd.arg("-Thost=x64");
+            }
         } else if target.contains("redox") {
             if !self.defined("CMAKE_SYSTEM_NAME") {
                 cmd.arg("-DCMAKE_SYSTEM_NAME=Generic");
