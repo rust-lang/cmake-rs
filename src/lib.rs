@@ -342,8 +342,8 @@ impl Config {
             cmd.arg("--debug-output");
         }
 
-        cmd.arg(&self.path)
-           .current_dir(&build);
+        cmd.current_dir(&build);
+
         if target.contains("windows-gnu") {
             if host.contains("windows") {
                 // On MinGW we need to coerce cmake to not generate a visual
@@ -606,7 +606,7 @@ impl Config {
         }
 
         if self.always_configure || !build.join("CMakeCache.txt").exists() {
-            run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
+            run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake", &self.path);
         } else {
             println!("CMake project was already configured. Skipping configuration step.");
         }
@@ -666,7 +666,7 @@ impl Config {
             .args(&parallel_args)
             .current_dir(&build);
 
-        run(&mut cmd, "cmake");
+        run(&mut cmd, "cmake", &self.path);
 
         println!("cargo:root={}", dst.display());
         return dst
@@ -743,7 +743,10 @@ impl Config {
     }
 }
 
-fn run(cmd: &mut Command, program: &str) {
+fn run(cmd: &mut Command, program: &str, src_dir: &PathBuf) {
+    // The path to the source dir should always be the last arg
+    cmd.arg(src_dir);
+
     println!("running: {:?}", cmd);
     let status = match cmd.status() {
         Ok(status) => status,
