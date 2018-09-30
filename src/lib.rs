@@ -344,6 +344,10 @@ impl Config {
 
         cmd.arg(&self.path)
            .current_dir(&build);
+        let mut is_ninja = false;
+        if let Some(ref generator) = self.generator {
+            is_ninja = generator.to_string_lossy().contains("Ninja");
+        }
         if target.contains("windows-gnu") {
             if host.contains("windows") {
                 // On MinGW we need to coerce cmake to not generate a visual
@@ -394,7 +398,7 @@ impl Config {
             if self.generator.is_none() {
                 cmd.arg("-G").arg(self.visual_studio_generator(&target));
             }
-            if target.contains("x86_64") {
+            if target.contains("x86_64") && !is_ninja {
                 cmd.arg("-Thost=x64");
             }
         } else if target.contains("redox") {
@@ -406,10 +410,8 @@ impl Config {
                 cmd.arg("-DCMAKE_SYSTEM_NAME=SunOS");
             }
         }
-        let mut is_ninja = false;
         if let Some(ref generator) = self.generator {
             cmd.arg("-G").arg(generator);
-            is_ninja = generator.to_string_lossy().contains("Ninja");
         }
         let profile = self.profile.clone().unwrap_or_else(|| {
             // Automatically set the `CMAKE_BUILD_TYPE` if the user did not
