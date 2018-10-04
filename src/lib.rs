@@ -614,19 +614,20 @@ impl Config {
         }
 
         let mut makeflags = None;
-        let mut parallel_args = Vec::new();
+        let mut parallel_flags = None;
+
         if let Ok(s) = env::var("NUM_JOBS") {
             match self.generator.as_ref().map(|g| g.to_string_lossy()) {
                 Some(ref g) if g.contains("Ninja") => {
-                    parallel_args.push(format!("-j{}", s));
+                    parallel_flags = Some(format!("-j{}", s));
                 }
                 Some(ref g) if g.contains("Visual Studio") => {
-                    parallel_args.push(format!("/m:{}", s));
+                    parallel_flags = Some(format!("/m:{}", s));
                 }
                 Some(ref g) if g.contains("NMake") => {
                     // NMake creates `Makefile`s, but doesn't understand `-jN`.
                 }
-                _ if fs::metadata(&dst.join("build/Makefile")).is_ok() => {
+                _ if fs::metadata(&build.join("Makefile")).is_ok() => {
                     match env::var_os("CARGO_MAKEFLAGS") {
                         // Only do this on non-windows and non-bsd
                         // On Windows, we could be invoking make instead of
@@ -641,7 +642,7 @@ impl Config {
                         ) => makeflags = Some(s.clone()),
 
                         // This looks like `make`, let's hope it understands `-jN`.
-                        _ => parallel_args.push(format!("-j{}", s)),
+                        _ => makeflags = Some(OsString::from(format!("-j{}", s))),
                     }
                 }
                 _ => {}
@@ -654,8 +655,13 @@ impl Config {
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
         }
+
         if let Some(flags) = makeflags {
             cmd.env("MAKEFLAGS", flags);
+        }
+
+        if let Some(flags) = parallel_flags {
+            cmd.arg(flags);
         }
 
         cmd.arg("--build").arg(".");
@@ -663,9 +669,10 @@ impl Config {
         if !self.no_build_target {
             cmd.arg("--target").arg(target);
         }
+
         cmd.arg("--config").arg(&profile)
-            .arg("--").args(&self.build_args)
-            .args(&parallel_args)
+            .arg("--")
+            .args(&self.build_args)
             .current_dir(&build);
 
         run(&mut cmd, "cmake");
