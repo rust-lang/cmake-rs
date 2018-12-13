@@ -406,10 +406,14 @@ impl Config {
             // If we're on MSVC we need to be sure to use the right generator or
             // otherwise we won't get 32/64 bit correct automatically.
             // This also guarantees that NMake generator isn't chosen implicitly.
+            let using_nmake_generator;
             if self.generator.is_none() {
                 cmd.arg("-G").arg(self.visual_studio_generator(&target));
+                using_nmake_generator = false;
+            } else {
+                using_nmake_generator = self.generator.as_ref().unwrap() == "NMake Makefiles";
             }
-            if target.contains("x86_64") && !is_ninja {
+            if target.contains("x86_64") && !is_ninja && !using_nmake_generator {
                 cmd.arg("-Thost=x64");
             }
         } else if target.contains("redox") {
