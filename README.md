@@ -1,6 +1,6 @@
 # cmake
 
-[![Build Status](https://travis-ci.org/alexcrichton/cmake-rs.svg?branch=master)](https://travis-ci.org/alexcrichton/cmake-rs)
+[![Build Status](https://travis-ci.com/alexcrichton/cmake-rs.svg?branch=master)](https://travis-ci.com/alexcrichton/cmake-rs)
 
 [Documentation](https://docs.rs/cmake)
 
