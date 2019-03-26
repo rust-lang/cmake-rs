@@ -14,4 +14,4 @@ A build dependency for running `cmake` to build a native library
 categories = ["development-tools::build-utils"]
 
 [dependencies]
-cc = "1.0"
+cc = "1.0.32"
