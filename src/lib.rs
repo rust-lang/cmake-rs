@@ -415,6 +415,7 @@ impl Config {
             }
             if target.contains("x86_64") && !is_ninja && !using_nmake_generator {
                 cmd.arg("-Thost=x64");
+                cmd.arg("-DCMAKE_GENERATOR_PLATFORM=x64");
             }
         } else if target.contains("redox") {
             if !self.defined("CMAKE_SYSTEM_NAME") {
@@ -706,6 +707,7 @@ impl Config {
         use cc::windows_registry::{find_vs_version, VsVers};
 
         let base = match find_vs_version() {
+            Ok(VsVers::Vs16) => "Visual Studio 16 2019",
             Ok(VsVers::Vs15) => "Visual Studio 15 2017",
             Ok(VsVers::Vs14) => "Visual Studio 14 2015",
             Ok(VsVers::Vs12) => "Visual Studio 12 2013",
@@ -716,10 +718,8 @@ impl Config {
             ),
             Err(msg) => panic!(msg),
         };
-        if target.contains("i686") {
+        if target.contains("i686") || target.contains("x86_64") {
             base.to_string()
-        } else if target.contains("x86_64") {
-            format!("{} Win64", base)
         } else {
             panic!("unsupported msvc target: {}", target);
         }
