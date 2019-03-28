@@ -681,10 +681,6 @@ impl Config {
             cmd.env("MAKEFLAGS", flags);
         }
 
-        if let Some(flags) = parallel_flags {
-            cmd.arg(flags);
-        }
-
         cmd.arg("--build").arg(".");
 
         if !self.no_build_target {
@@ -696,6 +692,10 @@ impl Config {
             .arg("--")
             .args(&self.build_args)
             .current_dir(&build);
+
+        if let Some(flags) = parallel_flags {
+            cmd.arg(flags);
+        }
 
         run(&mut cmd, "cmake");
 
