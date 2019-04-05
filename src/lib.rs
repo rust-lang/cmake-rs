@@ -339,7 +339,7 @@ impl Config {
 
         // Build up the first cmake command to build the build system.
         let executable = env::var("CMAKE").unwrap_or("cmake".to_owned());
-        let mut cmd = Command::new(executable);
+        let mut cmd = Command::new(&executable);
 
         if self.verbose_cmake {
             cmd.arg("-Wdev");
@@ -672,7 +672,7 @@ impl Config {
 
         // And build!
         let target = self.cmake_target.clone().unwrap_or("install".to_string());
-        let mut cmd = Command::new("cmake");
+        let mut cmd = Command::new(&executable);
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
         }
