@@ -1,0 +1,25 @@
+trigger:
+  - master
+
+jobs:
+  - job: Linux
+    pool:
+      vmImage: ubuntu-16.04
+    steps:
+      - template: ci/azure-steps.yml
+    strategy:
+      matrix:
+        stable:
+          TOOLCHAIN: stable
+        beta:
+          TOOLCHAIN: beta
+        nightly:
+          TOOLCHAIN: nightly
+  - job: docs
+    steps:
+      - template: ci/azure-install-rust.yml
+      - script: cargo doc --no-deps --all-features
+      - script: curl -LsSf https://git.io/fhJ8n | rustc - && (cd target/doc && ../../rust_out)
+        condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/master'))
+        env:
+          GITHUB_DEPLOY_KEY: $(GITHUB_DEPLOY_KEY)
