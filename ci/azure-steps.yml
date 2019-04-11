@@ -1,0 +1,5 @@
+steps:
+  - template: azure-install-rust.yml
+
+  - script: cargo test
+    displayName: Run tests
