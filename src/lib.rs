@@ -413,9 +413,25 @@ impl Config {
             } else {
                 using_nmake_generator = self.generator.as_ref().unwrap() == "NMake Makefiles";
             }
-            if target.contains("x86_64") && !is_ninja && !using_nmake_generator {
-                cmd.arg("-Thost=x64");
-                cmd.arg("-DCMAKE_GENERATOR_PLATFORM=x64");
+            if !is_ninja && !using_nmake_generator {
+                if target.contains("x86_64") {
+                    cmd.arg("-Thost=x64");
+                    cmd.arg("-Ax64");
+                } else if target.contains("i686") {
+                    use cc::windows_registry::{find_vs_version, VsVers};
+                    match find_vs_version() {
+                        Ok(VsVers::Vs16) => {
+                            // 32-bit x86 toolset used to be the default for all hosts,
+                            // but Visual Studio 2019 changed the default toolset to match the host,
+                            // so we need to manually override it for x86 targets
+                            cmd.arg("-Thost=x86");
+                            cmd.arg("-AWin32");
+                        }
+                        _ => {}
+                    };
+                } else {
+                    panic!("unsupported msvc target: {}", target);
+                }
             }
         } else if target.contains("redox") {
             if !self.defined("CMAKE_SYSTEM_NAME") {
