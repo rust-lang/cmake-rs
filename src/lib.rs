@@ -417,6 +417,9 @@ impl Config {
                 if target.contains("x86_64") {
                     cmd.arg("-Thost=x64");
                     cmd.arg("-Ax64");
+                } else if target.contains("thumbv7a") {
+                    cmd.arg("-Thost=x64");
+                    cmd.arg("-Aarm");
                 } else if target.contains("i686") {
                     use cc::windows_registry::{find_vs_version, VsVers};
                     match find_vs_version() {
