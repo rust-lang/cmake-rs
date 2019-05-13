@@ -734,7 +734,7 @@ impl Config {
             ),
             Err(msg) => panic!(msg),
         };
-        if target.contains("i686") || target.contains("x86_64") {
+        if target.contains("i686") || target.contains("x86_64") || target.contains("thumbv7a") {
             base.to_string()
         } else {
             panic!("unsupported msvc target: {}", target);
