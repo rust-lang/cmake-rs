@@ -417,6 +417,9 @@ impl Config {
                 if target.contains("x86_64") {
                     cmd.arg("-Thost=x64");
                     cmd.arg("-Ax64");
+                } else if target.contains("thumbv7a") {
+                    cmd.arg("-Thost=x64");
+                    cmd.arg("-Aarm");
                 } else if target.contains("i686") {
                     use cc::windows_registry::{find_vs_version, VsVers};
                     match find_vs_version() {
@@ -734,7 +737,7 @@ impl Config {
             ),
             Err(msg) => panic!(msg),
         };
-        if target.contains("i686") || target.contains("x86_64") {
+        if target.contains("i686") || target.contains("x86_64") || target.contains("thumbv7a") {
             base.to_string()
         } else {
             panic!("unsupported msvc target: {}", target);
