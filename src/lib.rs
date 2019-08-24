@@ -511,7 +511,8 @@ impl Config {
                 (OptLevel::Release, false) => "Release",
                 (OptLevel::Release, true) => "RelWithDebInfo",
                 (OptLevel::Size, _) => "MinSizeRel",
-            }.to_string()
+            }
+            .to_string()
         });
         for &(ref k, ref v) in &self.defines {
             let mut os = OsString::from("-D");
@@ -618,7 +619,8 @@ impl Config {
                                 } else {
                                     wchar
                                 }
-                            }).collect::<Vec<_>>();
+                            })
+                            .collect::<Vec<_>>();
                         ccompiler = OsString::from_wide(&wchars);
                     }
                     cmd.arg(ccompiler);
@@ -740,7 +742,10 @@ impl Config {
             ),
             Err(msg) => panic!(msg),
         };
-        if ["i686", "x86_64", "thumbv7a", "aarch64"].iter().any(|t| target.contains(t)) {
+        if ["i686", "x86_64", "thumbv7a", "aarch64"]
+            .iter()
+            .any(|t| target.contains(t))
+        {
             base.to_string()
         } else {
             panic!("unsupported msvc target: {}", target);
