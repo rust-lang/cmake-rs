@@ -1,7 +1,5 @@
 # cmake
 
-[![Build Status](https://travis-ci.com/alexcrichton/cmake-rs.svg?branch=master)](https://travis-ci.com/alexcrichton/cmake-rs)
-
 [Documentation](https://docs.rs/cmake)
 
 A build dependency for running the `cmake` build tool to compile a native
