@@ -176,7 +176,9 @@ impl Config {
         self
     }
 
-    /// Disables the target option for this compilation.
+    /// Disables the cmake target option for this compilation.
+    ///
+    /// Note that this isn't related to the target triple passed to the compiler!
     pub fn no_build_target(&mut self, no_build_target: bool) -> &mut Config {
         self.no_build_target = no_build_target;
         self
@@ -275,6 +277,18 @@ impl Config {
         self
     }
 
+    // Simple heuristic to determine if we're cross-compiling using the Android
+    // NDK toolchain file.
+    fn uses_android_ndk(&self) -> bool {
+        // `ANDROID_ABI` is the only required flag:
+        // https://developer.android.com/ndk/guides/cmake#android_abi
+        self.defined("ANDROID_ABI")
+            && self.defines.iter().any(|(flag, value)| {
+                flag == "CMAKE_TOOLCHAIN_FILE"
+                    && Path::new(value).file_name() == Some("android.toolchain.cmake".as_ref())
+            })
+    }
+
     /// Run this configuration, compiling the library with all the configured
     /// options.
     ///
@@ -293,23 +307,30 @@ impl Config {
         };
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let msvc = target.contains("msvc");
+        let ndk = self.uses_android_ndk();
         let mut c_cfg = cc::Build::new();
         c_cfg
             .cargo_metadata(false)
             .opt_level(0)
             .debug(false)
-            .target(&target)
             .warnings(false)
-            .host(&host);
+            .host(&host)
+            .no_default_flags(ndk);
+        if !ndk {
+            c_cfg.target(&target);
+        }
         let mut cxx_cfg = cc::Build::new();
         cxx_cfg
             .cargo_metadata(false)
             .cpp(true)
             .opt_level(0)
             .debug(false)
-            .target(&target)
             .warnings(false)
-            .host(&host);
+            .host(&host)
+            .no_default_flags(ndk);
+        if !ndk {
+            cxx_cfg.target(&target);
+        }
         if let Some(static_crt) = self.static_crt {
             c_cfg.static_crt(static_crt);
             cxx_cfg.static_crt(static_crt);
