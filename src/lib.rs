@@ -279,23 +279,17 @@ impl Config {
 
     // Simple heuristic to determine if we're cross-compiling using the Android
     // NDK toolchain file.
-    fn uses_ndk(&self) -> bool {
+    fn uses_android_ndk(&self) -> bool {
         // `ANDROID_ABI` is the only required flag:
         // https://developer.android.com/ndk/guides/cmake#android_abi
         self.defined("ANDROID_ABI")
-            && self
-                .defines
-                .iter()
-                .find_map(|(flag, value)| {
-                    if flag == "CMAKE_TOOLCHAIN_FILE" {
-                        Path::new(value)
-                            .file_name()
-                            .filter(|file_name| *file_name == "android.toolchain.cmake")
-                    } else {
-                        None
-                    }
-                })
-                .is_some()
+            && self.defines.iter().any(|(flag, value)| {
+                flag == "CMAKE_TOOLCHAIN_FILE"
+                    && Path::new(value)
+                        .file_name()
+                        .filter(|file_name| *file_name == "android.toolchain.cmake")
+                        .is_some()
+            })
     }
 
     /// Run this configuration, compiling the library with all the configured
@@ -316,7 +310,7 @@ impl Config {
         };
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let msvc = target.contains("msvc");
-        let ndk = self.uses_ndk();
+        let ndk = self.uses_android_ndk();
         let mut c_cfg = cc::Build::new();
         c_cfg
             .cargo_metadata(false)
