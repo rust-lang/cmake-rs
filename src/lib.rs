@@ -285,10 +285,7 @@ impl Config {
         self.defined("ANDROID_ABI")
             && self.defines.iter().any(|(flag, value)| {
                 flag == "CMAKE_TOOLCHAIN_FILE"
-                    && Path::new(value)
-                        .file_name()
-                        .filter(|file_name| *file_name == "android.toolchain.cmake")
-                        .is_some()
+                    && Path::new(value).file_name() == Some("android.toolchain.cmake".as_ref())
             })
     }
 
