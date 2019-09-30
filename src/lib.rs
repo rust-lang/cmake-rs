@@ -341,25 +341,13 @@ impl Config {
         if !ndk {
             cxx_cfg.target(&target);
         }
-        let mut asm_cfg = cc::Build::new();
-        asm_cfg
-            .cargo_metadata(false)
-            .opt_level(0)
-            .debug(false)
-            .warnings(false)
-            .host(&host)
-            .no_default_flags(ndk);
-        if !ndk {
-            asm_cfg.target(&target);
-        }
         if let Some(static_crt) = self.static_crt {
             c_cfg.static_crt(static_crt);
             cxx_cfg.static_crt(static_crt);
-            asm_cfg.static_crt(static_crt);
         }
         let c_compiler = c_cfg.get_compiler();
         let cxx_compiler = cxx_cfg.get_compiler();
-        let asm_compiler = asm_cfg.get_compiler();
+        let asm_compiler = c_cfg.get_compiler();
 
         let dst = self
             .out_dir
