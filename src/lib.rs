@@ -60,6 +60,7 @@ pub struct Config {
     generator: Option<OsString>,
     cflags: OsString,
     cxxflags: OsString,
+    asmflags: OsString,
     defines: Vec<(OsString, OsString)>,
     deps: Vec<String>,
     target: Option<String>,
@@ -106,6 +107,7 @@ impl Config {
             generator: None,
             cflags: OsString::new(),
             cxxflags: OsString::new(),
+            asmflags: OsString::new(),
             defines: Vec::new(),
             deps: Vec::new(),
             profile: None,
@@ -143,6 +145,14 @@ impl Config {
     pub fn cxxflag<P: AsRef<OsStr>>(&mut self, flag: P) -> &mut Config {
         self.cxxflags.push(" ");
         self.cxxflags.push(flag.as_ref());
+        self
+    }
+
+    /// Adds a custom flag to pass down to the ASM compiler, supplementing those
+    /// that this library already passes.
+    pub fn asmflag<P: AsRef<OsStr>>(&mut self, flag: P) -> &mut Config {
+        self.asmflags.push(" ");
+        self.asmflags.push(flag.as_ref());
         self
     }
 
@@ -337,6 +347,7 @@ impl Config {
         }
         let c_compiler = c_cfg.get_compiler();
         let cxx_compiler = cxx_cfg.get_compiler();
+        let asm_compiler = c_cfg.get_compiler();
 
         let dst = self
             .out_dir
@@ -650,6 +661,7 @@ impl Config {
 
             set_compiler("C", &c_compiler, &self.cflags);
             set_compiler("CXX", &cxx_compiler, &self.cxxflags);
+            set_compiler("ASM", &asm_compiler, &self.asmflags);
         }
 
         if !self.defined("CMAKE_BUILD_TYPE") {
