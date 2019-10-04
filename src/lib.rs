@@ -44,8 +44,13 @@
 
 #![deny(missing_docs)]
 
-extern crate cc;
+#[macro_use]
+extern crate lazy_static;
 
+extern crate cc;
+extern crate regex;
+
+use regex::Regex;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
@@ -857,6 +862,8 @@ trait Target {
 
 fn get_target(target_triple: &str) -> Box<dyn Target> {
     let target: Option<Box<dyn Target>>;
+    target = AppleTarget::new(target_triple)
+        .map(|apple_target| Box::new(apple_target) as Box<dyn Target>);
     target.unwrap_or_else(|| Box::new(GenericTarget::new(target_triple)))
 }
 
@@ -869,6 +876,177 @@ impl GenericTarget {
 }
 
 impl Target for GenericTarget {}
+
+struct AppleTarget {
+    rust_target: String,
+    rust_target_arch: String,
+    rust_target_platform: String,
+}
+
+impl AppleTarget {
+    fn new(target_triple: &str) -> Option<AppleTarget> {
+        let parts: Vec<&str> = target_triple.split('-').collect();
+        if parts.len() < 3 {
+            return None;
+        }
+
+        let rust_target_arch = parts[0];
+        let rust_target_vendor = parts[1];
+        let rust_target_platform = parts[2];
+
+        if rust_target_vendor != "apple" {
+            return None;
+        }
+        if rust_target_platform != "ios" && !rust_target_platform.starts_with("darwin") {
+            eprintln!(
+                "Warning: unknown Apple platform ({}) for target: {}",
+                rust_target_platform, target_triple
+            );
+            return None;
+        }
+
+        Some(AppleTarget {
+            rust_target: target_triple.to_owned(),
+            rust_target_arch: rust_target_arch.to_owned(),
+            rust_target_platform: rust_target_platform.to_owned(),
+        })
+    }
+
+    fn is_ios_target(&self) -> bool {
+        self.rust_target_platform == "ios"
+    }
+
+    fn is_osx_target(&self) -> bool {
+        self.rust_target_platform.starts_with("darwin")
+    }
+
+    fn cmake_target_arch(&self) -> Option<String> {
+        match self.rust_target_arch.as_str() {
+            "aarch64" => Some("arm64".to_owned()),
+            "armv7" => Some("armv7".to_owned()),
+            "armv7s" => Some("armv7s".to_owned()),
+            "i386" => Some("i386".to_owned()),
+            "x86_64" => Some("x86_64".to_owned()),
+            _ => {
+                eprintln!(
+                    "Warning: unknown architecture for target: {}",
+                    self.rust_target_arch
+                );
+                None
+            }
+        }
+    }
+
+    fn sdk_name(&self) -> Option<String> {
+        if self.is_ios_target() {
+            match self.rust_target_arch.as_str() {
+                "aarch64" | "armv7" | "armv7s" => Some("iphoneos".to_owned()),
+                "i386" | "x86_64" => Some("iphonesimulator".to_owned()),
+                _ => {
+                    eprintln!(
+                        "Warning: unknown architecture for Apple target: {}",
+                        self.rust_target_arch
+                    );
+                    None
+                }
+            }
+        } else if self.is_osx_target() {
+            Some("macosx".to_owned())
+        } else {
+            eprintln!(
+                "Warning: could not determine sdk name for Apple target: {}",
+                self.rust_target
+            );
+            None
+        }
+    }
+
+    fn deployment_target(&self) -> Option<String> {
+        if self.is_ios_target() {
+            println!("cargo:rerun-if-env-changed=IPHONEOS_DEPLOYMENT_TARGET");
+            Some(std::env::var("IPHONEOS_DEPLOYMENT_TARGET").unwrap_or_else(|_| "7.0".into()))
+        } else if self.is_osx_target() {
+            println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
+            Some(std::env::var("MACOSX_DEPLOYMENT_TARGET").unwrap_or_else(|_| "".into()))
+        } else {
+            eprintln!(
+                "Warning: could not determine deployment target for Apple target: {}",
+                self.rust_target
+            );
+            None
+        }
+    }
+}
+
+impl Target for AppleTarget {
+    fn add_cmake_defines(&self, cmd: &mut Command, config: &Config) {
+        // These 3 CMAKE_OSX_* variables apply to all Apple platforms
+
+        if !config.defined("CMAKE_OSX_ARCHITECTURES") {
+            if let Some(cmake_target_arch) = self.cmake_target_arch() {
+                cmd.arg(format!("-DCMAKE_OSX_ARCHITECTURES={}", cmake_target_arch));
+            }
+        }
+
+        if !config.defined("CMAKE_OSX_SYSROOT") {
+            if let Some(sdk_name) = self.sdk_name() {
+                cmd.arg(format!("-DCMAKE_OSX_SYSROOT={}", sdk_name));
+            }
+        }
+
+        if !config.defined("CMAKE_OSX_DEPLOYMENT_TARGET") {
+            if let Some(deployment_target) = self.deployment_target() {
+                cmd.arg(format!(
+                    "-DCMAKE_OSX_DEPLOYMENT_TARGET={}",
+                    deployment_target
+                ));
+            }
+        }
+
+        // CMAKE_SYSTEM_NAME is used to tell cmake we're cross-compiling
+        if self.is_ios_target() && !config.defined("CMAKE_SYSTEM_NAME") {
+            cmd.arg("-DCMAKE_SYSTEM_NAME=iOS");
+        }
+    }
+
+    fn should_exclude_env_var(&self, key: &OsStr, _value: &OsStr) -> bool {
+        key.to_str().map_or(false, |key| {
+            // These cause issues with llvm if an env var for a different Apple platform
+            // is present. Since cmake handles communicating these values to llvm, and
+            // we use cmake defines to tell cmake what the value is, the env vars themselves
+            // are filtered out.
+            key.ends_with("DEPLOYMENT_TARGET") || key.starts_with("SDK")
+        })
+    }
+
+    fn filter_compiler_args(&self, flags: &mut OsString) {
+        if let Some(flags_str) = flags.to_str() {
+            lazy_static! {
+                static ref ARCH_REGEX: Regex = Regex::new("-arch [^ ]+ ").unwrap();
+                static ref DEPLOYMENT_TARGET_REGEX: Regex =
+                    Regex::new("-m[\\w-]+-version-min=[\\d.]+ ").unwrap();
+                static ref SYSROOT_REGEX: Regex = Regex::new("-isysroot [^ ]+ ").unwrap();
+            }
+
+            let mut flags_string = flags_str.to_owned();
+            flags_string.push(' ');
+
+            // These are set by cmake
+            flags_string = ARCH_REGEX.replace(&flags_string, "").into_owned();
+            flags_string = DEPLOYMENT_TARGET_REGEX
+                .replace(&flags_string, "")
+                .into_owned();
+            flags_string = SYSROOT_REGEX.replace(&flags_string, "").into_owned();
+
+            if flags_string.ends_with(' ') {
+                flags_string.pop();
+            }
+
+            flags.clear();
+            flags.push(OsString::from(flags_string));
+        }
+    }
+}
 
 fn run(cmd: &mut Command, program: &str) {
     println!("running: {:?}", cmd);
