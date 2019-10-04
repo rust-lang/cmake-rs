@@ -579,35 +579,10 @@ impl Config {
                 None => false,
             };
             let mut set_compiler = |kind: &str, compiler: &cc::Tool, extra: &OsString| {
-                let flag_var = format!("CMAKE_{}_FLAGS", kind);
-                let tool_var = format!("CMAKE_{}_COMPILER", kind);
-                if !self.defined(&flag_var) {
-                    let mut flagsflag = OsString::from("-D");
-                    flagsflag.push(&flag_var);
-                    flagsflag.push("=");
-                    flagsflag.push(extra);
-                    for arg in compiler.args() {
-                        if skip_arg(arg) {
-                            continue;
-                        }
-                        flagsflag.push(" ");
-                        flagsflag.push(arg);
-                    }
-                    cmd.arg(flagsflag);
-                }
-
-                // The visual studio generator apparently doesn't respect
-                // `CMAKE_C_FLAGS` but does respect `CMAKE_C_FLAGS_RELEASE` and
-                // such. We need to communicate /MD vs /MT, so set those vars
-                // here.
-                //
-                // Note that for other generators, though, this *overrides*
-                // things like the optimization flags, which is bad.
-                if self.generator.is_none() && msvc {
-                    let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind, build_type_upcase);
-                    if !self.defined(&flag_var_alt) {
+                let mut add_compiler_flags = |flag_var_name: &str| {
+                    if !self.defined(&flag_var_name) {
                         let mut flagsflag = OsString::from("-D");
-                        flagsflag.push(&flag_var_alt);
+                        flagsflag.push(&flag_var_name);
                         flagsflag.push("=");
                         flagsflag.push(extra);
                         for arg in compiler.args() {
@@ -619,6 +594,22 @@ impl Config {
                         }
                         cmd.arg(flagsflag);
                     }
+                };
+
+                let flag_var = format!("CMAKE_{}_FLAGS", kind);
+                let tool_var = format!("CMAKE_{}_COMPILER", kind);
+                add_compiler_flags(&flag_var);
+
+                // The visual studio generator apparently doesn't respect
+                // `CMAKE_C_FLAGS` but does respect `CMAKE_C_FLAGS_RELEASE` and
+                // such. We need to communicate /MD vs /MT, so set those vars
+                // here.
+                //
+                // Note that for other generators, though, this *overrides*
+                // things like the optimization flags, which is bad.
+                if self.generator.is_none() && msvc {
+                    let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind, build_type_upcase);
+                    add_compiler_flags(&flag_var_alt);
                 }
 
                 // Apparently cmake likes to have an absolute path to the
