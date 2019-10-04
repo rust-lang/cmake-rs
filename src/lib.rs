@@ -315,6 +315,7 @@ impl Config {
                 t
             }
         };
+        let target = get_target(&target_triple);
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let msvc = target_triple.contains("msvc");
         let ndk = self.uses_android_ndk();
@@ -481,6 +482,9 @@ impl Config {
                 cmd.arg("-DCMAKE_SYSTEM_NAME=SunOS");
             }
         }
+
+        target.add_cmake_defines(&mut cmd, self);
+
         if let Some(ref generator) = self.generator {
             cmd.arg("-G").arg(generator);
         }
@@ -581,17 +585,25 @@ impl Config {
             let mut set_compiler = |kind: &str, compiler: &cc::Tool, extra: &OsString| {
                 let mut add_compiler_flags = |flag_var_name: &str| {
                     if !self.defined(&flag_var_name) {
-                        let mut flagsflag = OsString::from("-D");
-                        flagsflag.push(&flag_var_name);
-                        flagsflag.push("=");
-                        flagsflag.push(extra);
+                        let mut compiler_flags = OsString::new();
                         for arg in compiler.args() {
                             if skip_arg(arg) {
                                 continue;
                             }
-                            flagsflag.push(" ");
-                            flagsflag.push(arg);
+                            compiler_flags.push(" ");
+                            compiler_flags.push(arg);
                         }
+                        target.filter_compiler_args(&mut compiler_flags);
+
+                        // We want to filter compiler args from cc-rs, but not user-supplied ones,
+                        // so we add user-supplied ones after we filter.
+                        compiler_flags.push(extra);
+
+                        let mut flagsflag = OsString::from("-D");
+                        flagsflag.push(flag_var_name);
+                        flagsflag.push("=");
+                        flagsflag.push(compiler_flags);
+
                         cmd.arg(flagsflag);
                     }
                 };
@@ -671,6 +683,9 @@ impl Config {
         }
 
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
+            if target.should_exclude_env_var(k, v) {
+                continue;
+            }
             cmd.env(k, v);
         }
 
@@ -720,9 +735,12 @@ impl Config {
         }
 
         // And build!
-        let target = self.cmake_target.clone().unwrap_or("install".to_string());
+        let cmake_target = self.cmake_target.clone().unwrap_or("install".to_string());
         let mut cmd = Command::new(&executable);
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
+            if target.should_exclude_env_var(k, v) {
+                continue;
+            }
             cmd.env(k, v);
         }
 
@@ -733,7 +751,7 @@ impl Config {
         cmd.arg("--build").arg(".");
 
         if !self.no_build_target {
-            cmd.arg("--target").arg(target);
+            cmd.arg("--target").arg(cmake_target);
         }
 
         cmd.arg("--config")
@@ -826,6 +844,31 @@ impl Config {
         }
     }
 }
+
+trait Target {
+    fn add_cmake_defines(&self, _cmd: &mut Command, _config: &Config) {}
+
+    fn should_exclude_env_var(&self, _key: &OsStr, _value: &OsStr) -> bool {
+        false
+    }
+
+    fn filter_compiler_args(&self, _flags: &mut OsString) {}
+}
+
+fn get_target(target_triple: &str) -> Box<dyn Target> {
+    let target: Option<Box<dyn Target>>;
+    target.unwrap_or_else(|| Box::new(GenericTarget::new(target_triple)))
+}
+
+struct GenericTarget {}
+
+impl GenericTarget {
+    fn new(_target_triple: &str) -> GenericTarget {
+        GenericTarget {}
+    }
+}
+
+impl Target for GenericTarget {}
 
 fn run(cmd: &mut Command, program: &str) {
     println!("running: {:?}", cmd);
