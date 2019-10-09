@@ -354,8 +354,8 @@ impl Config {
             cxx_cfg.static_crt(static_crt);
         }
         if let Some(explicit_flag) = self.pic {
-            c_cfg.static_crt(explicit_flag);
-            cxx_cfg.static_crt(explicit_flag);
+            c_cfg.pic(explicit_flag);
+            cxx_cfg.pic(explicit_flag);
         }
         let c_compiler = c_cfg.get_compiler();
         let cxx_compiler = cxx_cfg.get_compiler();
