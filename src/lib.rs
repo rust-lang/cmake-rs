@@ -76,7 +76,7 @@ pub struct Config {
     no_build_target: bool,
     verbose_cmake: bool,
     verbose_make: bool,
-    pic: Option<bool>
+    pic: Option<bool>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -124,7 +124,7 @@ impl Config {
             no_build_target: false,
             verbose_cmake: false,
             verbose_make: false,
-            pic: None
+            pic: None,
         }
     }
 
