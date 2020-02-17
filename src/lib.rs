@@ -108,9 +108,13 @@ impl Config {
         Config::new_with_configs(path, None, None)
     }
 
-        /// Creates a new blank set of configuration to build the project specified
+    /// Creates a new blank set of configuration to build the project specified
     /// at the path `path`.
-    pub fn new_with_configs<P: AsRef<Path>>(path: P, c_cfg: Option<cc::Build>, cxx_cfg: Option<cc::Build>) -> Config {
+    pub fn new_with_configs<P: AsRef<Path>>(
+        path: P,
+        c_cfg: Option<cc::Build>,
+        cxx_cfg: Option<cc::Build>,
+    ) -> Config {
         Config {
             path: env::current_dir().unwrap().join(path),
             generator: None,
