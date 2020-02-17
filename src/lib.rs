@@ -77,6 +77,8 @@ pub struct Config {
     verbose_cmake: bool,
     verbose_make: bool,
     pic: Option<bool>,
+    c_cfg: Option<cc::Build>,
+    cxx_cfg: Option<cc::Build>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -103,6 +105,12 @@ impl Config {
     /// Creates a new blank set of configuration to build the project specified
     /// at the path `path`.
     pub fn new<P: AsRef<Path>>(path: P) -> Config {
+        Config::new_with_configs(path, None, None)
+    }
+
+        /// Creates a new blank set of configuration to build the project specified
+    /// at the path `path`.
+    pub fn new_with_configs<P: AsRef<Path>>(path: P, c_cfg: Option<cc::Build>, cxx_cfg: Option<cc::Build>) -> Config {
         Config {
             path: env::current_dir().unwrap().join(path),
             generator: None,
@@ -125,6 +133,8 @@ impl Config {
             verbose_cmake: false,
             verbose_make: false,
             pic: None,
+            c_cfg,
+            cxx_cfg,
         }
     }
 
@@ -326,7 +336,11 @@ impl Config {
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let msvc = target.contains("msvc");
         let ndk = self.uses_android_ndk();
-        let mut c_cfg = cc::Build::new();
+        let mut c_cfg = if let Some(cfg) = self.c_cfg.take() {
+            cfg
+        } else {
+            cc::Build::new()
+        };
         c_cfg
             .cargo_metadata(false)
             .opt_level(0)
@@ -337,7 +351,12 @@ impl Config {
         if !ndk {
             c_cfg.target(&target);
         }
-        let mut cxx_cfg = cc::Build::new();
+
+        let mut cxx_cfg = if let Some(cfg) = self.cxx_cfg.take() {
+            cfg
+        } else {
+            cc::Build::new()
+        };
         cxx_cfg
             .cargo_metadata(false)
             .cpp(true)
