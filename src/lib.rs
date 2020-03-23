@@ -81,6 +81,7 @@ pub struct Config {
     no_build_target: bool,
     verbose_cmake: bool,
     verbose_make: bool,
+    pic: Option<bool>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -128,7 +129,14 @@ impl Config {
             no_build_target: false,
             verbose_cmake: false,
             verbose_make: false,
+            pic: None,
         }
+    }
+
+    /// Sets flag for PIC. Otherwise use cc::Build platform default
+    pub fn pic(&mut self, explicit_flag: bool) -> &mut Config {
+        self.pic = Some(explicit_flag);
+        self
     }
 
     /// Sets the build-tool generator (`-G`) for this compilation.
@@ -350,6 +358,10 @@ impl Config {
         if let Some(static_crt) = self.static_crt {
             c_cfg.static_crt(static_crt);
             cxx_cfg.static_crt(static_crt);
+        }
+        if let Some(explicit_flag) = self.pic {
+            c_cfg.pic(explicit_flag);
+            cxx_cfg.pic(explicit_flag);
         }
         let c_compiler = c_cfg.get_compiler();
         let cxx_compiler = cxx_cfg.get_compiler();
