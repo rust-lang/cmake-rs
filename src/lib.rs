@@ -44,13 +44,8 @@
 
 #![deny(missing_docs)]
 
-#[macro_use]
-extern crate lazy_static;
-
 extern crate cc;
-extern crate regex;
 
-use regex::Regex;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
@@ -1033,22 +1028,22 @@ impl Target for AppleTarget {
 
     fn filter_compiler_args(&self, flags: &mut OsString) {
         if let Some(flags_str) = flags.to_str() {
-            lazy_static! {
-                static ref ARCH_REGEX: Regex = Regex::new("-arch [^ ]+ ").unwrap();
-                static ref DEPLOYMENT_TARGET_REGEX: Regex =
-                    Regex::new("-m[\\w-]+-version-min=[\\d.]+ ").unwrap();
-                static ref SYSROOT_REGEX: Regex = Regex::new("-isysroot [^ ]+ ").unwrap();
-            }
-
             let mut flags_string = flags_str.to_owned();
             flags_string.push(' ');
-
             // These are set by cmake
-            flags_string = ARCH_REGEX.replace(&flags_string, "").into_owned();
-            flags_string = DEPLOYMENT_TARGET_REGEX
-                .replace(&flags_string, "")
-                .into_owned();
-            flags_string = SYSROOT_REGEX.replace(&flags_string, "").into_owned();
+            // The initial version of this logic used the Regex crate and lazy_static.
+            // Architecture regex: "-arch [^ ]+ "
+            // Deployment target regex: "-m[\\w-]+-version-min=[\\d.]+ "
+            // sysroot regex: "-isysroot [^ ]+ "
+            // The following forloop emulates that set of regular expressions.
+            for i in flags.to_string_lossy().split(" -") {
+                if i.starts_with("isysroot")
+                    || i.starts_with("arch")
+                    || (i.starts_with("m") && i.contains("-version-min="))
+                {
+                    flags_string = flags_string.replace(&format!(" -{}", i), "");
+                }
+            }
 
             if flags_string.ends_with(' ') {
                 flags_string.pop();
@@ -1058,6 +1053,17 @@ impl Target for AppleTarget {
             flags.push(OsString::from(flags_string));
         }
     }
+}
+
+#[test]
+fn test_filter_compiler_args_ios() {
+    let target = AppleTarget::new("aarch64-apple-ios").unwrap();
+    let mut input_flags = OsString::from(" -fPIC -m64 -m64 -mios-simulator-version-min=7.0 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator13.2.sdk -fembed-bitcode -arch aarch64-apple-ios");
+    target.filter_compiler_args(&mut input_flags);
+    assert_eq!(
+        input_flags,
+        OsString::from(" -fPIC -m64 -m64 -fembed-bitcode")
+    );
 }
 
 fn run(cmd: &mut Command, program: &str) {
