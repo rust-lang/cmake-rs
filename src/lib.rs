@@ -313,7 +313,7 @@ impl Config {
     /// This will run both the build system generator command as well as the
     /// command to build the library.
     pub fn build(&mut self) -> PathBuf {
-        let target = match self.target.clone() {
+        let target_triple = match self.target.clone() {
             Some(t) => t,
             None => {
                 let mut t = getenv_unwrap("TARGET");
@@ -323,8 +323,9 @@ impl Config {
                 t
             }
         };
+        let target = get_target(&target_triple);
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
-        let msvc = target.contains("msvc");
+        let msvc = target_triple.contains("msvc");
         let ndk = self.uses_android_ndk();
         let mut c_cfg = cc::Build::new();
         c_cfg
@@ -335,7 +336,7 @@ impl Config {
             .host(&host)
             .no_default_flags(ndk);
         if !ndk {
-            c_cfg.target(&target);
+            c_cfg.target(&target_triple);
         }
         let mut cxx_cfg = cc::Build::new();
         cxx_cfg
@@ -347,7 +348,7 @@ impl Config {
             .host(&host)
             .no_default_flags(ndk);
         if !ndk {
-            cxx_cfg.target(&target);
+            cxx_cfg.target(&target_triple);
         }
         if let Some(static_crt) = self.static_crt {
             c_cfg.static_crt(static_crt);
@@ -395,7 +396,7 @@ impl Config {
         if let Some(ref generator) = self.generator {
             is_ninja = generator.to_string_lossy().contains("Ninja");
         }
-        if target.contains("windows-gnu") {
+        if target_triple.contains("windows-gnu") {
             if host.contains("windows") {
                 // On MinGW we need to coerce cmake to not generate a visual
                 // studio build system but instead use makefiles that MinGW can
@@ -452,22 +453,23 @@ impl Config {
             // This also guarantees that NMake generator isn't chosen implicitly.
             let using_nmake_generator;
             if self.generator.is_none() {
-                cmd.arg("-G").arg(self.visual_studio_generator(&target));
+                cmd.arg("-G")
+                    .arg(self.visual_studio_generator(&target_triple));
                 using_nmake_generator = false;
             } else {
                 using_nmake_generator = self.generator.as_ref().unwrap() == "NMake Makefiles";
             }
             if !is_ninja && !using_nmake_generator {
-                if target.contains("x86_64") {
+                if target_triple.contains("x86_64") {
                     cmd.arg("-Thost=x64");
                     cmd.arg("-Ax64");
-                } else if target.contains("thumbv7a") {
+                } else if target_triple.contains("thumbv7a") {
                     cmd.arg("-Thost=x64");
                     cmd.arg("-Aarm");
-                } else if target.contains("aarch64") {
+                } else if target_triple.contains("aarch64") {
                     cmd.arg("-Thost=x64");
                     cmd.arg("-AARM64");
-                } else if target.contains("i686") {
+                } else if target_triple.contains("i686") {
                     use cc::windows_registry::{find_vs_version, VsVers};
                     match find_vs_version() {
                         Ok(VsVers::Vs16) => {
@@ -480,18 +482,21 @@ impl Config {
                         _ => {}
                     };
                 } else {
-                    panic!("unsupported msvc target: {}", target);
+                    panic!("unsupported msvc target: {}", target_triple);
                 }
             }
-        } else if target.contains("redox") {
+        } else if target_triple.contains("redox") {
             if !self.defined("CMAKE_SYSTEM_NAME") {
                 cmd.arg("-DCMAKE_SYSTEM_NAME=Generic");
             }
-        } else if target.contains("solaris") {
+        } else if target_triple.contains("solaris") {
             if !self.defined("CMAKE_SYSTEM_NAME") {
                 cmd.arg("-DCMAKE_SYSTEM_NAME=SunOS");
             }
         }
+
+        target.add_cmake_defines(&mut cmd, self);
+
         if let Some(ref generator) = self.generator {
             cmd.arg("-G").arg(generator);
         }
@@ -590,22 +595,34 @@ impl Config {
                 None => false,
             };
             let mut set_compiler = |kind: &str, compiler: &cc::Tool, extra: &OsString| {
+                let mut add_compiler_flags = |flag_var_name: &str| {
+                    if !self.defined(&flag_var_name) {
+                        let mut compiler_flags = OsString::new();
+                        for arg in compiler.args() {
+                            if skip_arg(arg) {
+                                continue;
+                            }
+                            compiler_flags.push(" ");
+                            compiler_flags.push(arg);
+                        }
+                        target.filter_compiler_args(&mut compiler_flags);
+
+                        // We want to filter compiler args from cc-rs, but not user-supplied ones,
+                        // so we add user-supplied ones after we filter.
+                        compiler_flags.push(extra);
+
+                        let mut flagsflag = OsString::from("-D");
+                        flagsflag.push(flag_var_name);
+                        flagsflag.push("=");
+                        flagsflag.push(compiler_flags);
+
+                        cmd.arg(flagsflag);
+                    }
+                };
+
                 let flag_var = format!("CMAKE_{}_FLAGS", kind);
                 let tool_var = format!("CMAKE_{}_COMPILER", kind);
-                if !self.defined(&flag_var) {
-                    let mut flagsflag = OsString::from("-D");
-                    flagsflag.push(&flag_var);
-                    flagsflag.push("=");
-                    flagsflag.push(extra);
-                    for arg in compiler.args() {
-                        if skip_arg(arg) {
-                            continue;
-                        }
-                        flagsflag.push(" ");
-                        flagsflag.push(arg);
-                    }
-                    cmd.arg(flagsflag);
-                }
+                add_compiler_flags(&flag_var);
 
                 // The visual studio generator apparently doesn't respect
                 // `CMAKE_C_FLAGS` but does respect `CMAKE_C_FLAGS_RELEASE` and
@@ -616,20 +633,7 @@ impl Config {
                 // things like the optimization flags, which is bad.
                 if self.generator.is_none() && msvc {
                     let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind, build_type_upcase);
-                    if !self.defined(&flag_var_alt) {
-                        let mut flagsflag = OsString::from("-D");
-                        flagsflag.push(&flag_var_alt);
-                        flagsflag.push("=");
-                        flagsflag.push(extra);
-                        for arg in compiler.args() {
-                            if skip_arg(arg) {
-                                continue;
-                            }
-                            flagsflag.push(" ");
-                            flagsflag.push(arg);
-                        }
-                        cmd.arg(flagsflag);
-                    }
+                    add_compiler_flags(&flag_var_alt);
                 }
 
                 // Apparently cmake likes to have an absolute path to the
@@ -691,6 +695,9 @@ impl Config {
         }
 
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
+            if target.should_exclude_env_var(k, v) {
+                continue;
+            }
             cmd.env(k, v);
         }
 
@@ -740,9 +747,12 @@ impl Config {
         }
 
         // And build!
-        let target = self.cmake_target.clone().unwrap_or("install".to_string());
+        let cmake_target = self.cmake_target.clone().unwrap_or("install".to_string());
         let mut cmd = Command::new(&executable);
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
+            if target.should_exclude_env_var(k, v) {
+                continue;
+            }
             cmd.env(k, v);
         }
 
@@ -753,7 +763,7 @@ impl Config {
         cmd.arg("--build").arg(".");
 
         if !self.no_build_target {
-            cmd.arg("--target").arg(target);
+            cmd.arg("--target").arg(cmake_target);
         }
 
         cmd.arg("--config")
@@ -845,6 +855,215 @@ impl Config {
             }
         }
     }
+}
+
+trait Target {
+    fn add_cmake_defines(&self, _cmd: &mut Command, _config: &Config) {}
+
+    fn should_exclude_env_var(&self, _key: &OsStr, _value: &OsStr) -> bool {
+        false
+    }
+
+    fn filter_compiler_args(&self, _flags: &mut OsString) {}
+}
+
+fn get_target(target_triple: &str) -> Box<dyn Target> {
+    let target: Option<Box<dyn Target>>;
+    target = AppleTarget::new(target_triple)
+        .map(|apple_target| Box::new(apple_target) as Box<dyn Target>);
+    target.unwrap_or_else(|| Box::new(GenericTarget::new(target_triple)))
+}
+
+struct GenericTarget {}
+
+impl GenericTarget {
+    fn new(_target_triple: &str) -> GenericTarget {
+        GenericTarget {}
+    }
+}
+
+impl Target for GenericTarget {}
+
+struct AppleTarget {
+    rust_target: String,
+    rust_target_arch: String,
+    rust_target_platform: String,
+}
+
+impl AppleTarget {
+    fn new(target_triple: &str) -> Option<AppleTarget> {
+        let parts: Vec<&str> = target_triple.split('-').collect();
+        if parts.len() < 3 {
+            return None;
+        }
+
+        let rust_target_arch = parts[0];
+        let rust_target_vendor = parts[1];
+        let rust_target_platform = parts[2];
+
+        if rust_target_vendor != "apple" {
+            return None;
+        }
+        if rust_target_platform != "ios" && !rust_target_platform.starts_with("darwin") {
+            eprintln!(
+                "Warning: unknown Apple platform ({}) for target: {}",
+                rust_target_platform, target_triple
+            );
+            return None;
+        }
+
+        Some(AppleTarget {
+            rust_target: target_triple.to_owned(),
+            rust_target_arch: rust_target_arch.to_owned(),
+            rust_target_platform: rust_target_platform.to_owned(),
+        })
+    }
+
+    fn is_ios_target(&self) -> bool {
+        self.rust_target_platform == "ios"
+    }
+
+    fn is_osx_target(&self) -> bool {
+        self.rust_target_platform.starts_with("darwin")
+    }
+
+    fn cmake_target_arch(&self) -> Option<String> {
+        match self.rust_target_arch.as_str() {
+            "aarch64" => Some("arm64".to_owned()),
+            "armv7" => Some("armv7".to_owned()),
+            "armv7s" => Some("armv7s".to_owned()),
+            "i386" => Some("i386".to_owned()),
+            "x86_64" => Some("x86_64".to_owned()),
+            _ => {
+                eprintln!(
+                    "Warning: unknown architecture for target: {}",
+                    self.rust_target_arch
+                );
+                None
+            }
+        }
+    }
+
+    fn sdk_name(&self) -> Option<String> {
+        if self.is_ios_target() {
+            match self.rust_target_arch.as_str() {
+                "aarch64" | "armv7" | "armv7s" => Some("iphoneos".to_owned()),
+                "i386" | "x86_64" => Some("iphonesimulator".to_owned()),
+                _ => {
+                    eprintln!(
+                        "Warning: unknown architecture for Apple target: {}",
+                        self.rust_target_arch
+                    );
+                    None
+                }
+            }
+        } else if self.is_osx_target() {
+            Some("macosx".to_owned())
+        } else {
+            eprintln!(
+                "Warning: could not determine sdk name for Apple target: {}",
+                self.rust_target
+            );
+            None
+        }
+    }
+
+    fn deployment_target(&self) -> Option<String> {
+        if self.is_ios_target() {
+            println!("cargo:rerun-if-env-changed=IPHONEOS_DEPLOYMENT_TARGET");
+            Some(std::env::var("IPHONEOS_DEPLOYMENT_TARGET").unwrap_or_else(|_| "7.0".into()))
+        } else if self.is_osx_target() {
+            println!("cargo:rerun-if-env-changed=MACOSX_DEPLOYMENT_TARGET");
+            Some(std::env::var("MACOSX_DEPLOYMENT_TARGET").unwrap_or_else(|_| "".into()))
+        } else {
+            eprintln!(
+                "Warning: could not determine deployment target for Apple target: {}",
+                self.rust_target
+            );
+            None
+        }
+    }
+}
+
+impl Target for AppleTarget {
+    fn add_cmake_defines(&self, cmd: &mut Command, config: &Config) {
+        // These 3 CMAKE_OSX_* variables apply to all Apple platforms
+
+        if !config.defined("CMAKE_OSX_ARCHITECTURES") {
+            if let Some(cmake_target_arch) = self.cmake_target_arch() {
+                cmd.arg(format!("-DCMAKE_OSX_ARCHITECTURES={}", cmake_target_arch));
+            }
+        }
+
+        if !config.defined("CMAKE_OSX_SYSROOT") {
+            if let Some(sdk_name) = self.sdk_name() {
+                cmd.arg(format!("-DCMAKE_OSX_SYSROOT={}", sdk_name));
+            }
+        }
+
+        if !config.defined("CMAKE_OSX_DEPLOYMENT_TARGET") {
+            if let Some(deployment_target) = self.deployment_target() {
+                cmd.arg(format!(
+                    "-DCMAKE_OSX_DEPLOYMENT_TARGET={}",
+                    deployment_target
+                ));
+            }
+        }
+
+        // CMAKE_SYSTEM_NAME is used to tell cmake we're cross-compiling
+        if self.is_ios_target() && !config.defined("CMAKE_SYSTEM_NAME") {
+            cmd.arg("-DCMAKE_SYSTEM_NAME=iOS");
+        }
+    }
+
+    fn should_exclude_env_var(&self, key: &OsStr, _value: &OsStr) -> bool {
+        key.to_str().map_or(false, |key| {
+            // These cause issues with llvm if an env var for a different Apple platform
+            // is present. Since cmake handles communicating these values to llvm, and
+            // we use cmake defines to tell cmake what the value is, the env vars themselves
+            // are filtered out.
+            key.ends_with("DEPLOYMENT_TARGET") || key.starts_with("SDK")
+        })
+    }
+
+    fn filter_compiler_args(&self, flags: &mut OsString) {
+        if let Some(flags_str) = flags.to_str() {
+            let mut flags_string = flags_str.to_owned();
+            flags_string.push(' ');
+            // These are set by cmake
+            // The initial version of this logic used the Regex crate and lazy_static.
+            // Architecture regex: "-arch [^ ]+ "
+            // Deployment target regex: "-m[\\w-]+-version-min=[\\d.]+ "
+            // sysroot regex: "-isysroot [^ ]+ "
+            // The following forloop emulates that set of regular expressions.
+            for i in flags.to_string_lossy().split(" -") {
+                if i.starts_with("isysroot")
+                    || i.starts_with("arch")
+                    || (i.starts_with("m") && i.contains("-version-min="))
+                {
+                    flags_string = flags_string.replace(&format!(" -{}", i), "");
+                }
+            }
+
+            if flags_string.ends_with(' ') {
+                flags_string.pop();
+            }
+
+            flags.clear();
+            flags.push(OsString::from(flags_string));
+        }
+    }
+}
+
+#[test]
+fn test_filter_compiler_args_ios() {
+    let target = AppleTarget::new("aarch64-apple-ios").unwrap();
+    let mut input_flags = OsString::from(" -fPIC -m64 -m64 -mios-simulator-version-min=7.0 -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator13.2.sdk -fembed-bitcode -arch aarch64-apple-ios");
+    target.filter_compiler_args(&mut input_flags);
+    assert_eq!(
+        input_flags,
+        OsString::from(" -fPIC -m64 -m64 -fembed-bitcode")
+    );
 }
 
 fn run(cmd: &mut Command, program: &str) {
