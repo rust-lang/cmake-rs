@@ -49,10 +49,10 @@ extern crate cc;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
-use std::io::prelude::*;
 use std::io::ErrorKind;
+use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus};
 
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
@@ -695,7 +695,7 @@ impl Config {
         }
 
         if self.always_configure || !build.join("CMakeCache.txt").exists() {
-            run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
+            run_configure(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
         } else {
             println!("CMake project was already configured. Skipping configuration step.");
         }
@@ -847,9 +847,37 @@ impl Config {
     }
 }
 
-fn run(cmd: &mut Command, program: &str) {
+fn run_configure(cmd: &mut Command, program: &str) {
     println!("running: {:?}", cmd);
-    let status = match cmd.status() {
+    let output = match cmd.output() {
+        Ok(output) => {
+            handle_cmake_exec_result(Ok(output.status), program);
+            output
+        }
+        Err(err) => {
+            handle_cmake_exec_result(Err(err), program);
+            return;
+        }
+    };
+    static RESET_MSG: &[u8] = b"Configure will be re-run and you may have to reset some variables";
+    if contains(&output.stderr, RESET_MSG) || contains(&output.stdout, RESET_MSG) {
+        println!("looks like cmake reset all variables, time to reconfigure");
+        handle_cmake_exec_result(cmd.status(), program);
+    }
+}
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
+}
+
+fn run(cmd: &mut Command, program: &str) {
+    handle_cmake_exec_result(cmd.status(), program);
+}
+
+fn handle_cmake_exec_result(r: Result<ExitStatus, io::Error>, program: &str) {
+    let status = match r {
         Ok(status) => status,
         Err(ref e) if e.kind() == ErrorKind::NotFound => {
             fail(&format!(
