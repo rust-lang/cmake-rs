@@ -50,10 +50,11 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
-use std::io::prelude::*;
-use std::io::ErrorKind;
+use std::io::{self, prelude::*, ErrorKind};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus, Stdio};
+use std::sync::{Arc, Mutex};
+use std::thread::{self};
 
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
@@ -518,6 +519,7 @@ impl Config {
             .getenv_target_os("CMAKE")
             .unwrap_or(OsString::from("cmake"));
         let mut conf_cmd = Command::new(&executable);
+        conf_cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
         if self.verbose_cmake {
             conf_cmd.arg("-Wdev");
@@ -779,11 +781,14 @@ impl Config {
             conf_cmd.env(k, v);
         }
 
+        conf_cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path);
+        conf_cmd.args(&self.configure_args);
         if self.always_configure || !build.join(CMAKE_CACHE_FILE).exists() {
-            conf_cmd.args(&self.configure_args);
-            run(
-                conf_cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path),
-                "cmake",
+            run_cmake_action(
+                &build,
+                CMakeAction::Configure {
+                    conf_cmd: &mut conf_cmd,
+                },
             );
         } else {
             println!("CMake project was already configured. Skipping configuration step.");
@@ -793,6 +798,7 @@ impl Config {
         let target = self.cmake_target.clone().unwrap_or("install".to_string());
         let mut build_cmd = Command::new(&executable);
         build_cmd.current_dir(&build);
+        build_cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
             build_cmd.env(k, v);
@@ -836,7 +842,13 @@ impl Config {
             build_cmd.arg("--").args(&self.build_args);
         }
 
-        run(&mut build_cmd, "cmake");
+        run_cmake_action(
+            &build,
+            CMakeAction::Build {
+                build_cmd: &mut build_cmd,
+                conf_cmd: &mut conf_cmd,
+            },
+        );
 
         println!("cargo:root={}", dst.display());
         return dst;
@@ -944,9 +956,118 @@ impl Config {
     }
 }
 
+enum CMakeAction<'a> {
+    Configure {
+        conf_cmd: &'a mut Command,
+    },
+    Build {
+        conf_cmd: &'a mut Command,
+        build_cmd: &'a mut Command,
+    },
+}
+
+fn run_cmake_action(build_dir: &Path, mut action: CMakeAction) {
+    let program = "cmake";
+    let cmd = match &mut action {
+        CMakeAction::Configure { conf_cmd } => conf_cmd,
+        CMakeAction::Build { build_cmd, .. } => build_cmd,
+    };
+    let need_rerun = match run_and_check_if_need_reconf(*cmd, program) {
+        Ok(x) => x,
+        Err(err) => {
+            handle_cmake_exec_result(Err(err), program);
+            return;
+        }
+    };
+    if need_rerun {
+        println!("Looks like toolchain was changed");
+        //just in case some wrong value was cached
+        let _ = fs::remove_file(&build_dir.join(CMAKE_CACHE_FILE));
+        match action {
+            CMakeAction::Configure { conf_cmd } => run(conf_cmd, program),
+            CMakeAction::Build {
+                conf_cmd,
+                build_cmd,
+            } => {
+                run(conf_cmd, program);
+                run(build_cmd, program);
+            }
+        }
+    }
+}
+
+// Acording to
+// https://gitlab.kitware.com/cmake/cmake/-/issues/18959
+// CMake does not support usage of the same build directory for different
+// compilers. The problem is that we can not make sure that we use the same compiler
+// before running of CMake without CMake's logic duplication (for example consider
+// usage of CMAKE_TOOLCHAIN_FILE). Fortunately for us, CMake can detect is
+// compiler changed by itself. This is done for interactive CMake's configuration,
+// like ccmake/cmake-gui. But after compiler change CMake resets all cached variables.
+fn run_and_check_if_need_reconf(cmd: &mut Command, program: &str) -> Result<bool, io::Error> {
+    println!("running: {:?}", cmd);
+    let mut child = cmd.spawn()?;
+    let mut child_stderr = child.stderr.take().expect("Internal error no stderr");
+    let full_stderr = Arc::new(Mutex::new(Vec::<u8>::with_capacity(1024)));
+    let full_stderr2 = full_stderr.clone();
+    let stderr_thread = thread::spawn(move || {
+        let mut full_stderr = full_stderr2
+            .lock()
+            .expect("Internal error: Lock of stderr buffer failed");
+        log_and_copy_stream(&mut child_stderr, &mut io::stderr(), &mut full_stderr)
+    });
+
+    let mut child_stdout = child.stdout.take().expect("Internal error no stdout");
+    let mut full_stdout = Vec::with_capacity(1024);
+    log_and_copy_stream(&mut child_stdout, &mut io::stdout(), &mut full_stdout)?;
+    stderr_thread
+        .join()
+        .expect("Internal stderr thread join failed")?;
+
+    static RESET_MSG: &[u8] = b"Configure will be re-run and you may have to reset some variables";
+    let full_stderr = full_stderr
+        .lock()
+        .expect("Internal error stderr lock failed");
+    if contains(&full_stderr, RESET_MSG) || contains(&full_stdout, RESET_MSG) {
+        return Ok(true);
+    } else {
+        handle_cmake_exec_result(child.wait(), program);
+        return Ok(false);
+    }
+}
+
 fn run(cmd: &mut Command, program: &str) {
     println!("running: {:?}", cmd);
-    let status = match cmd.status() {
+    handle_cmake_exec_result(cmd.status(), program);
+}
+
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
+}
+
+fn log_and_copy_stream<R: Read, W: Write>(
+    reader: &mut R,
+    writer: &mut W,
+    log: &mut Vec<u8>,
+) -> io::Result<()> {
+    let mut buf = [0; 80];
+    loop {
+        let len = match reader.read(&mut buf) {
+            Ok(0) => break,
+            Ok(len) => len,
+            Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
+            Err(e) => return Err(e),
+        };
+        log.extend_from_slice(&buf[0..len]);
+        writer.write_all(&buf[0..len])?;
+    }
+    Ok(())
+}
+
+fn handle_cmake_exec_result(r: Result<ExitStatus, io::Error>, program: &str) {
+    let status = match r {
         Ok(status) => status,
         Err(ref e) if e.kind() == ErrorKind::NotFound => {
             fail(&format!(
