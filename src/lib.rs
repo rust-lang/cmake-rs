@@ -77,6 +77,7 @@ pub struct Config {
     verbose_cmake: bool,
     verbose_make: bool,
     pic: Option<bool>,
+    no_c_flags: bool,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -125,6 +126,7 @@ impl Config {
             verbose_cmake: false,
             verbose_make: false,
             pic: None,
+            no_c_flags: false,
         }
     }
 
@@ -199,6 +201,12 @@ impl Config {
     /// Note that this isn't related to the target triple passed to the compiler!
     pub fn no_build_target(&mut self, no_build_target: bool) -> &mut Config {
         self.no_build_target = no_build_target;
+        self
+    }
+
+    /// Disables all of the extra cmake c and cxx flags for this compilation.
+    pub fn no_c_flags(&mut self, no_c_flags: bool) -> &mut Config {
+        self.no_c_flags = no_c_flags;
         self
     }
 
@@ -583,42 +591,19 @@ impl Config {
             .flat_map(|c| c.to_uppercase())
             .collect::<String>();
 
-        {
-            // let cmake deal with optimization/debuginfo
-            let skip_arg = |arg: &OsStr| match arg.to_str() {
-                Some(s) => s.starts_with("-O") || s.starts_with("/O") || s == "-g",
-                None => false,
-            };
-            let mut set_compiler = |kind: &str, compiler: &cc::Tool, extra: &OsString| {
-                let flag_var = format!("CMAKE_{}_FLAGS", kind);
-                let tool_var = format!("CMAKE_{}_COMPILER", kind);
-                if !self.defined(&flag_var) {
-                    let mut flagsflag = OsString::from("-D");
-                    flagsflag.push(&flag_var);
-                    flagsflag.push("=");
-                    flagsflag.push(extra);
-                    for arg in compiler.args() {
-                        if skip_arg(arg) {
-                            continue;
-                        }
-                        flagsflag.push(" ");
-                        flagsflag.push(arg);
-                    }
-                    cmd.arg(flagsflag);
-                }
-
-                // The visual studio generator apparently doesn't respect
-                // `CMAKE_C_FLAGS` but does respect `CMAKE_C_FLAGS_RELEASE` and
-                // such. We need to communicate /MD vs /MT, so set those vars
-                // here.
-                //
-                // Note that for other generators, though, this *overrides*
-                // things like the optimization flags, which is bad.
-                if self.generator.is_none() && msvc {
-                    let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind, build_type_upcase);
-                    if !self.defined(&flag_var_alt) {
+        if !self.no_c_flags {
+            {
+                // let cmake deal with optimization/debuginfo
+                let skip_arg = |arg: &OsStr| match arg.to_str() {
+                    Some(s) => s.starts_with("-O") || s.starts_with("/O") || s == "-g",
+                    None => false,
+                };
+                let mut set_compiler = |kind: &str, compiler: &cc::Tool, extra: &OsString| {
+                    let flag_var = format!("CMAKE_{}_FLAGS", kind);
+                    let tool_var = format!("CMAKE_{}_COMPILER", kind);
+                    if !self.defined(&flag_var) {
                         let mut flagsflag = OsString::from("-D");
-                        flagsflag.push(&flag_var_alt);
+                        flagsflag.push(&flag_var);
                         flagsflag.push("=");
                         flagsflag.push(extra);
                         for arg in compiler.args() {
@@ -630,50 +615,75 @@ impl Config {
                         }
                         cmd.arg(flagsflag);
                     }
-                }
 
-                // Apparently cmake likes to have an absolute path to the
-                // compiler as otherwise it sometimes thinks that this variable
-                // changed as it thinks the found compiler, /usr/bin/cc,
-                // differs from the specified compiler, cc. Not entirely sure
-                // what's up, but at least this means cmake doesn't get
-                // confused?
-                //
-                // Also specify this on Windows only if we use MSVC with Ninja,
-                // as it's not needed for MSVC with Visual Studio generators and
-                // for MinGW it doesn't really vary.
-                if !self.defined("CMAKE_TOOLCHAIN_FILE")
-                    && !self.defined(&tool_var)
-                    && (env::consts::FAMILY != "windows" || (msvc && is_ninja))
-                {
-                    let mut ccompiler = OsString::from("-D");
-                    ccompiler.push(&tool_var);
-                    ccompiler.push("=");
-                    ccompiler.push(find_exe(compiler.path()));
-                    #[cfg(windows)]
-                    {
-                        // CMake doesn't like unescaped `\`s in compiler paths
-                        // so we either have to escape them or replace with `/`s.
-                        use std::os::windows::ffi::{OsStrExt, OsStringExt};
-                        let wchars = ccompiler
-                            .encode_wide()
-                            .map(|wchar| {
-                                if wchar == b'\\' as u16 {
-                                    '/' as u16
-                                } else {
-                                    wchar
+                    // The visual studio generator apparently doesn't respect
+                    // `CMAKE_C_FLAGS` but does respect `CMAKE_C_FLAGS_RELEASE` and
+                    // such. We need to communicate /MD vs /MT, so set those vars
+                    // here.
+                    //
+                    // Note that for other generators, though, this *overrides*
+                    // things like the optimization flags, which is bad.
+                    if self.generator.is_none() && msvc {
+                        let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind, build_type_upcase);
+                        if !self.defined(&flag_var_alt) {
+                            let mut flagsflag = OsString::from("-D");
+                            flagsflag.push(&flag_var_alt);
+                            flagsflag.push("=");
+                            flagsflag.push(extra);
+                            for arg in compiler.args() {
+                                if skip_arg(arg) {
+                                    continue;
                                 }
-                            })
-                            .collect::<Vec<_>>();
-                        ccompiler = OsString::from_wide(&wchars);
+                                flagsflag.push(" ");
+                                flagsflag.push(arg);
+                            }
+                            cmd.arg(flagsflag);
+                        }
                     }
-                    cmd.arg(ccompiler);
-                }
-            };
 
-            set_compiler("C", &c_compiler, &self.cflags);
-            set_compiler("CXX", &cxx_compiler, &self.cxxflags);
-            set_compiler("ASM", &asm_compiler, &self.asmflags);
+                    // Apparently cmake likes to have an absolute path to the
+                    // compiler as otherwise it sometimes thinks that this variable
+                    // changed as it thinks the found compiler, /usr/bin/cc,
+                    // differs from the specified compiler, cc. Not entirely sure
+                    // what's up, but at least this means cmake doesn't get
+                    // confused?
+                    //
+                    // Also specify this on Windows only if we use MSVC with Ninja,
+                    // as it's not needed for MSVC with Visual Studio generators and
+                    // for MinGW it doesn't really vary.
+                    if !self.defined("CMAKE_TOOLCHAIN_FILE")
+                        && !self.defined(&tool_var)
+                        && (env::consts::FAMILY != "windows" || (msvc && is_ninja))
+                    {
+                        let mut ccompiler = OsString::from("-D");
+                        ccompiler.push(&tool_var);
+                        ccompiler.push("=");
+                        ccompiler.push(find_exe(compiler.path()));
+                        #[cfg(windows)]
+                        {
+                            // CMake doesn't like unescaped `\`s in compiler paths
+                            // so we either have to escape them or replace with `/`s.
+                            use std::os::windows::ffi::{OsStrExt, OsStringExt};
+                            let wchars = ccompiler
+                                .encode_wide()
+                                .map(|wchar| {
+                                    if wchar == b'\\' as u16 {
+                                        '/' as u16
+                                    } else {
+                                        wchar
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+                            ccompiler = OsString::from_wide(&wchars);
+                        }
+                        cmd.arg(ccompiler);
+                    }
+                };
+
+                set_compiler("C", &c_compiler, &self.cflags);
+                set_compiler("CXX", &cxx_compiler, &self.cxxflags);
+                set_compiler("ASM", &asm_compiler, &self.asmflags);
+            }
         }
 
         if !self.defined("CMAKE_BUILD_TYPE") {
