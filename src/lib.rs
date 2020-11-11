@@ -100,6 +100,77 @@ pub fn build<P: AsRef<Path>>(path: P) -> PathBuf {
 }
 
 impl Config {
+    /// Return explicitly set profile or infer `CMAKE_BUILD_TYPE` from Rust's compilation profile.
+    ///
+    /// * if `opt-level=0` then `CMAKE_BUILD_TYPE=Debug`,
+    /// * if `opt-level={1,2,3}` and:
+    ///   * `debug=false` then `CMAKE_BUILD_TYPE=Release`
+    ///   * otherwise `CMAKE_BUILD_TYPE=RelWithDebInfo`
+    /// * if `opt-level={s,z}` then `CMAKE_BUILD_TYPE=MinSizeRel`
+    pub fn get_profile(&self) -> &str {
+        if let Some(profile) = self.profile.as_ref() {
+            profile
+        } else {
+            // Determine Rust's profile, optimization level, and debug info:
+            #[derive(PartialEq)]
+            enum RustProfile {
+                Debug,
+                Release,
+            }
+            #[derive(PartialEq, Debug)]
+            enum OptLevel {
+                Debug,
+                Release,
+                Size,
+            }
+
+            let rust_profile = match &getenv_unwrap("PROFILE")[..] {
+                "debug" => RustProfile::Debug,
+                "release" | "bench" => RustProfile::Release,
+                unknown => {
+                    eprintln!(
+                        "Warning: unknown Rust profile={}; defaulting to a release build.",
+                        unknown
+                    );
+                    RustProfile::Release
+                }
+            };
+
+            let opt_level = match &getenv_unwrap("OPT_LEVEL")[..] {
+                "0" => OptLevel::Debug,
+                "1" | "2" | "3" => OptLevel::Release,
+                "s" | "z" => OptLevel::Size,
+                unknown => {
+                    let default_opt_level = match rust_profile {
+                        RustProfile::Debug => OptLevel::Debug,
+                        RustProfile::Release => OptLevel::Release,
+                    };
+                    eprintln!(
+                        "Warning: unknown opt-level={}; defaulting to a {:?} build.",
+                        unknown, default_opt_level
+                    );
+                    default_opt_level
+                }
+            };
+
+            let debug_info: bool = match &getenv_unwrap("DEBUG")[..] {
+                "false" => false,
+                "true" => true,
+                unknown => {
+                    eprintln!("Warning: unknown debug={}; defaulting to `true`.", unknown);
+                    true
+                }
+            };
+
+            match (opt_level, debug_info) {
+                (OptLevel::Debug, _) => "Debug",
+                (OptLevel::Release, false) => "Release",
+                (OptLevel::Release, true) => "RelWithDebInfo",
+                (OptLevel::Size, _) => "MinSizeRel",
+            }
+        }
+    }
+
     /// Creates a new blank set of configuration to build the project specified
     /// at the path `path`.
     pub fn new<P: AsRef<Path>>(path: P) -> Config {
@@ -495,69 +566,7 @@ impl Config {
         if let Some(ref generator) = self.generator {
             cmd.arg("-G").arg(generator);
         }
-        let profile = self.profile.clone().unwrap_or_else(|| {
-            // Automatically set the `CMAKE_BUILD_TYPE` if the user did not
-            // specify one.
-
-            // Determine Rust's profile, optimization level, and debug info:
-            #[derive(PartialEq)]
-            enum RustProfile {
-                Debug,
-                Release,
-            }
-            #[derive(PartialEq, Debug)]
-            enum OptLevel {
-                Debug,
-                Release,
-                Size,
-            }
-
-            let rust_profile = match &getenv_unwrap("PROFILE")[..] {
-                "debug" => RustProfile::Debug,
-                "release" | "bench" => RustProfile::Release,
-                unknown => {
-                    eprintln!(
-                        "Warning: unknown Rust profile={}; defaulting to a release build.",
-                        unknown
-                    );
-                    RustProfile::Release
-                }
-            };
-
-            let opt_level = match &getenv_unwrap("OPT_LEVEL")[..] {
-                "0" => OptLevel::Debug,
-                "1" | "2" | "3" => OptLevel::Release,
-                "s" | "z" => OptLevel::Size,
-                unknown => {
-                    let default_opt_level = match rust_profile {
-                        RustProfile::Debug => OptLevel::Debug,
-                        RustProfile::Release => OptLevel::Release,
-                    };
-                    eprintln!(
-                        "Warning: unknown opt-level={}; defaulting to a {:?} build.",
-                        unknown, default_opt_level
-                    );
-                    default_opt_level
-                }
-            };
-
-            let debug_info: bool = match &getenv_unwrap("DEBUG")[..] {
-                "false" => false,
-                "true" => true,
-                unknown => {
-                    eprintln!("Warning: unknown debug={}; defaulting to `true`.", unknown);
-                    true
-                }
-            };
-
-            match (opt_level, debug_info) {
-                (OptLevel::Debug, _) => "Debug",
-                (OptLevel::Release, false) => "Release",
-                (OptLevel::Release, true) => "RelWithDebInfo",
-                (OptLevel::Size, _) => "MinSizeRel",
-            }
-            .to_string()
-        });
+        let profile = self.get_profile();
         for &(ref k, ref v) in &self.defines {
             let mut os = OsString::from("-D");
             os.push(k);
