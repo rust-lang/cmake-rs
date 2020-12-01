@@ -718,7 +718,7 @@ impl Config {
                     parallel_flags = Some(format!("-j{}", s));
                 }
                 Some(ref g) if g.contains("Visual Studio") => {
-                    parallel_flags = Some(format!("/m:{}", s));
+                    parallel_flags = Some(format!("/MP{}", s));
                 }
                 Some(ref g) if g.contains("NMake") => {
                     // NMake creates `Makefile`s, but doesn't understand `-jN`.
@@ -745,6 +745,11 @@ impl Config {
                     }
                 }
                 _ => {}
+            }
+        } else {
+            let cmake_version = cmake_version();
+            if cmake_version.0 > 3 && cmake_version.1 > 12 {
+                parallel_flags = Some(String::from("--parallel"));
             }
         }
 
@@ -892,4 +897,14 @@ fn getenv_unwrap(v: &str) -> String {
 
 fn fail(s: &str) -> ! {
     panic!("\n{}\n\nbuild script failed, must exit now", s)
+}
+
+// Returns the major, minor and patch versions of cmake
+fn cmake_version() -> (u8, u8, u8) {
+    let cmd = Command::new("cmake").arg("--version").output().unwrap();
+    let version = String::from_utf8_lossy(&cmd.stdout);
+    let version: Vec<&str> = version.split_whitespace().collect();
+    let version: Vec<&str> = version[2].split(".").collect();
+    let version: Vec<u8> = version.iter().map(|c| c.parse().unwrap()).collect();
+    (version[0], version[1], version[2])
 }
