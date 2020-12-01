@@ -748,7 +748,7 @@ impl Config {
             }
         } else {
             let cmake_version = cmake_version();
-            if cmake_version.0 > 3 && cmake_version.1 > 12 {
+            if cmake_version.0 >= 3 && cmake_version.1 > 12 {
                 parallel_flags = Some(String::from("--parallel"));
             }
         }
