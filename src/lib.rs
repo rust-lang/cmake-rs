@@ -718,7 +718,7 @@ impl Config {
                     parallel_flags = Some(format!("-j{}", s));
                 }
                 Some(ref g) if g.contains("Visual Studio") => {
-                    parallel_flags = Some(format!("/m:{}", s));
+                    parallel_flags = Some(format!("/MP{}", s));
                 }
                 Some(ref g) if g.contains("NMake") => {
                     // NMake creates `Makefile`s, but doesn't understand `-jN`.
