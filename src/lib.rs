@@ -893,4 +893,3 @@ fn getenv_unwrap(v: &str) -> String {
 fn fail(s: &str) -> ! {
     panic!("\n{}\n\nbuild script failed, must exit now", s)
 }
-
