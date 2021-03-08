@@ -384,6 +384,18 @@ impl Config {
     /// This will run both the build system generator command as well as the
     /// command to build the library.
     pub fn build(&mut self) -> PathBuf {
+        self.build_with(cc::Build::new(), cc::Build::new())
+    }
+
+    /// Run this configuration, compiling the library with all the configured
+    /// options.
+    ///
+    /// Use the given [`cc::Build`] configurations `c_cfg` and `cxx_cfg` as a starting point for
+    /// the C and C++ builds respectively.
+    ///
+    /// This will run both the build system generator command as well as the
+    /// command to build the library.
+    pub fn build_with(&mut self, mut c_cfg: cc::Build, mut cxx_cfg: cc::Build) -> PathBuf {
         let target = match self.target.clone() {
             Some(t) => t,
             None => {
@@ -397,9 +409,9 @@ impl Config {
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let msvc = target.contains("msvc");
         let ndk = self.uses_android_ndk();
-        let mut c_cfg = cc::Build::new();
         c_cfg
             .cargo_metadata(false)
+            .cpp(false)
             .opt_level(0)
             .debug(false)
             .warnings(false)
@@ -408,7 +420,6 @@ impl Config {
         if !ndk {
             c_cfg.target(&target);
         }
-        let mut cxx_cfg = cc::Build::new();
         cxx_cfg
             .cargo_metadata(false)
             .cpp(true)
