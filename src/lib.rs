@@ -77,6 +77,8 @@ pub struct Config {
     verbose_cmake: bool,
     verbose_make: bool,
     pic: Option<bool>,
+    c_cfg: Option<cc::Build>,
+    cxx_cfg: Option<cc::Build>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -196,6 +198,8 @@ impl Config {
             verbose_cmake: false,
             verbose_make: false,
             pic: None,
+            c_cfg: None,
+            cxx_cfg: None,
         }
     }
 
@@ -378,6 +382,18 @@ impl Config {
             })
     }
 
+    /// Initializes the C build configuration.
+    pub fn init_c_cfg(&mut self, c_cfg: cc::Build) -> &mut Config {
+        self.c_cfg = Some(c_cfg);
+        self
+    }
+
+    /// Initializes the C++ build configuration.
+    pub fn init_cxx_cfg(&mut self, cxx_cfg: cc::Build) -> &mut Config {
+        self.cxx_cfg = Some(cxx_cfg);
+        self
+    }
+
     /// Run this configuration, compiling the library with all the configured
     /// options.
     ///
@@ -397,9 +413,10 @@ impl Config {
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let msvc = target.contains("msvc");
         let ndk = self.uses_android_ndk();
-        let mut c_cfg = cc::Build::new();
+        let mut c_cfg = self.c_cfg.clone().unwrap_or_default();
         c_cfg
             .cargo_metadata(false)
+            .cpp(false)
             .opt_level(0)
             .debug(false)
             .warnings(false)
@@ -408,7 +425,7 @@ impl Config {
         if !ndk {
             c_cfg.target(&target);
         }
-        let mut cxx_cfg = cc::Build::new();
+        let mut cxx_cfg = self.c_cfg.clone().unwrap_or_default();
         cxx_cfg
             .cargo_metadata(false)
             .cpp(true)
