@@ -425,7 +425,7 @@ impl Config {
         if !ndk {
             c_cfg.target(&target);
         }
-        let mut cxx_cfg = self.c_cfg.clone().unwrap_or_default();
+        let mut cxx_cfg = self.cxx_cfg.clone().unwrap_or_default();
         cxx_cfg
             .cargo_metadata(false)
             .cpp(true)
