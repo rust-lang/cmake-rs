@@ -67,6 +67,7 @@ pub struct Config {
     host: Option<String>,
     out_dir: Option<PathBuf>,
     profile: Option<String>,
+    configure_args: Vec<OsString>,
     build_args: Vec<OsString>,
     cmake_target: Option<String>,
     env: Vec<(OsString, OsString)>,
@@ -188,6 +189,7 @@ impl Config {
             out_dir: None,
             target: None,
             host: None,
+            configure_args: Vec::new(),
             build_args: Vec::new(),
             cmake_target: None,
             env: Vec::new(),
@@ -315,6 +317,12 @@ impl Config {
     /// This option defaults to `false`, and affect only msvc targets.
     pub fn static_crt(&mut self, static_crt: bool) -> &mut Config {
         self.static_crt = Some(static_crt);
+        self
+    }
+
+    /// Add an argument to the `cmake` configure step
+    pub fn configure_arg<A: AsRef<OsStr>>(&mut self, arg: A) -> &mut Config {
+        self.configure_args.push(arg.as_ref().to_owned());
         self
     }
 
@@ -727,6 +735,7 @@ impl Config {
         }
 
         if self.always_configure || !build.join("CMakeCache.txt").exists() {
+            cmd.args(&self.configure_args);
             run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
         } else {
             println!("CMake project was already configured. Skipping configuration step.");
