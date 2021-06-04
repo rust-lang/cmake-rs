@@ -212,6 +212,10 @@ impl Config {
     }
 
     /// Sets the build-tool generator (`-G`) for this compilation.
+    ///
+    /// If unset, this crate will use the `CMAKE_GENERATOR` environment variable
+    /// if set. Otherwise, it will guess the best generator to use based on the
+    /// build target.
     pub fn generator<T: AsRef<OsStr>>(&mut self, generator: T) -> &mut Config {
         self.generator = Some(generator.as_ref().to_owned());
         self
@@ -418,6 +422,12 @@ impl Config {
                 t
             }
         };
+
+        let mut generator = self
+            .generator
+            .clone()
+            .or_else(|| std::env::var_os("CMAKE_GENERATOR"));
+
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let msvc = target.contains("msvc");
         let ndk = self.uses_android_ndk();
@@ -488,7 +498,7 @@ impl Config {
 
         cmd.arg(&self.path).current_dir(&build);
         let mut is_ninja = false;
-        if let Some(ref generator) = self.generator {
+        if let Some(ref generator) = generator {
             is_ninja = generator.to_string_lossy().contains("Ninja");
         }
         if target.contains("windows-gnu") {
@@ -496,7 +506,7 @@ impl Config {
                 // On MinGW we need to coerce cmake to not generate a visual
                 // studio build system but instead use makefiles that MinGW can
                 // use to build.
-                if self.generator.is_none() {
+                if generator.is_none() {
                     // If make.exe isn't found, that means we may be using a MinGW
                     // toolchain instead of a MSYS2 toolchain. If neither is found,
                     // the build cannot continue.
@@ -547,11 +557,11 @@ impl Config {
             // otherwise we won't get 32/64 bit correct automatically.
             // This also guarantees that NMake generator isn't chosen implicitly.
             let using_nmake_generator;
-            if self.generator.is_none() {
+            if generator.is_none() {
                 cmd.arg("-G").arg(self.visual_studio_generator(&target));
                 using_nmake_generator = false;
             } else {
-                using_nmake_generator = self.generator.as_ref().unwrap() == "NMake Makefiles";
+                using_nmake_generator = generator.as_ref().unwrap() == "NMake Makefiles";
             }
             if !is_ninja && !using_nmake_generator {
                 if target.contains("x86_64") {
@@ -594,7 +604,7 @@ impl Config {
                 cmd.arg("-DCMAKE_OSX_DEPLOYMENT_TARGET=");
             }
         }
-        if let Some(ref generator) = self.generator {
+        if let Some(ref generator) = generator {
             cmd.arg("-G").arg(generator);
         }
         let profile = self.get_profile();
@@ -654,7 +664,7 @@ impl Config {
                 //
                 // Note that for other generators, though, this *overrides*
                 // things like the optimization flags, which is bad.
-                if self.generator.is_none() && msvc {
+                if generator.is_none() && msvc {
                     let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind, build_type_upcase);
                     if !self.defined(&flag_var_alt) {
                         let mut flagsflag = OsString::from("-D");
@@ -745,7 +755,7 @@ impl Config {
         let mut parallel_flags = None;
 
         if let Ok(s) = env::var("NUM_JOBS") {
-            match self.generator.as_ref().map(|g| g.to_string_lossy()) {
+            match generator.as_ref().map(|g| g.to_string_lossy()) {
                 Some(ref g) if g.contains("Ninja") => {
                     parallel_flags = Some(format!("-j{}", s));
                 }
