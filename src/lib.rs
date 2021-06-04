@@ -735,8 +735,10 @@ impl Config {
         }
 
         if !self.defined("CMAKE_TOOLCHAIN_FILE") {
-            if let Ok(s) = env::var("CMAKE_TOOLCHAIN_FILE") {
-                cmd.arg(&format!("-DCMAKE_TOOLCHAIN_FILE={}", s));
+            if let Some(s) = get_target_env_var(&host, &target, "CMAKE_TOOLCHAIN_FILE") {
+                let mut cmake_toolchain_file = OsString::from("-DCMAKE_TOOLCHAIN_FILE=");
+                cmake_toolchain_file.push(&s);
+                cmd.arg(cmake_toolchain_file);
             }
         }
 
@@ -896,6 +898,16 @@ impl Config {
             }
         }
     }
+}
+
+/// Gets a target
+fn get_target_env_var(host: &str, target: &str, var_base: &str) -> Option<OsString> {
+    let kind = if host == target { "HOST" } else { "TARGET" };
+    let target_u = target.replace("-", "_");
+    std::env::var_os(&format!("{}_{}", var_base, target))
+        .or_else(|| std::env::var_os(&format!("{}_{}", var_base, target_u)))
+        .or_else(|| std::env::var_os(&format!("{}_{}", kind, var_base)))
+        .or_else(|| std::env::var_os(var_base))
 }
 
 fn run(cmd: &mut Command, program: &str) {
