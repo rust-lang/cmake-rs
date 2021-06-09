@@ -46,6 +46,7 @@
 
 extern crate cc;
 
+use std::collections::HashMap;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
@@ -53,6 +54,7 @@ use std::io::prelude::*;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
@@ -80,6 +82,7 @@ pub struct Config {
     pic: Option<bool>,
     c_cfg: Option<cc::Build>,
     cxx_cfg: Option<cc::Build>,
+    env_cache: Mutex<HashMap<String, Option<OsString>>>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -202,6 +205,7 @@ impl Config {
             pic: None,
             c_cfg: None,
             cxx_cfg: None,
+            env_cache: Mutex::new(HashMap::new()),
         }
     }
 
@@ -427,7 +431,7 @@ impl Config {
         let generator = self
             .generator
             .clone()
-            .or_else(|| get_target_env_var(&host, &target, "CMAKE_GENERATOR"));
+            .or_else(|| self.getenv_target_os("CMAKE_GENERATOR"));
 
         let msvc = target.contains("msvc");
         let ndk = self.uses_android_ndk();
@@ -483,14 +487,16 @@ impl Config {
                 cmake_prefix_path.push(PathBuf::from(root));
             }
         }
-        let system_prefix =
-            get_target_env_var(&host, &target, "CMAKE_PREFIX_PATH").unwrap_or(OsString::new());
+        let system_prefix = self
+            .getenv_target_os("CMAKE_PREFIX_PATH")
+            .unwrap_or(OsString::new());
         cmake_prefix_path.extend(env::split_paths(&system_prefix).map(|s| s.to_owned()));
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
-        let executable =
-            get_target_env_var(&host, &target, "CMAKE").unwrap_or(OsString::from("cmake"));
+        let executable = self
+            .getenv_target_os("CMAKE")
+            .unwrap_or(OsString::from("cmake"));
         let mut cmd = Command::new(&executable);
 
         if self.verbose_cmake {
@@ -737,7 +743,7 @@ impl Config {
         }
 
         if !self.defined("CMAKE_TOOLCHAIN_FILE") {
-            if let Some(s) = get_target_env_var(&host, &target, "CMAKE_TOOLCHAIN_FILE") {
+            if let Some(s) = self.getenv_target_os("CMAKE_TOOLCHAIN_FILE") {
                 let mut cmake_toolchain_file = OsString::from("-DCMAKE_TOOLCHAIN_FILE=");
                 cmake_toolchain_file.push(&s);
                 cmd.arg(cmake_toolchain_file);
@@ -827,6 +833,33 @@ impl Config {
         return dst;
     }
 
+    fn getenv_os(&self, v: &str) -> Option<OsString> {
+        let mut cache = self.env_cache.lock().unwrap();
+        if let Some(val) = cache.get(v) {
+            return val.clone();
+        }
+        let r = env::var_os(v);
+        println!("{} = {:?}", v, r);
+        cache.insert(v.to_string(), r.clone());
+        r
+    }
+
+    /// Gets a target-specific environment variable.
+    fn getenv_target_os(&self, var_base: &str) -> Option<OsString> {
+        let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
+        let target = self
+            .target
+            .clone()
+            .unwrap_or_else(|| getenv_unwrap("TARGET"));
+
+        let kind = if host == target { "HOST" } else { "TARGET" };
+        let target_u = target.replace("-", "_");
+        self.getenv_os(&format!("{}_{}", var_base, target))
+            .or_else(|| self.getenv_os(&format!("{}_{}", var_base, target_u)))
+            .or_else(|| self.getenv_os(&format!("{}_{}", kind, var_base)))
+            .or_else(|| self.getenv_os(var_base))
+    }
+
     fn visual_studio_generator(&self, target: &str) -> String {
         use cc::windows_registry::{find_vs_version, VsVers};
 
@@ -900,16 +933,6 @@ impl Config {
             }
         }
     }
-}
-
-/// Gets a target
-fn get_target_env_var(host: &str, target: &str, var_base: &str) -> Option<OsString> {
-    let kind = if host == target { "HOST" } else { "TARGET" };
-    let target_u = target.replace("-", "_");
-    std::env::var_os(&format!("{}_{}", var_base, target))
-        .or_else(|| std::env::var_os(&format!("{}_{}", var_base, target_u)))
-        .or_else(|| std::env::var_os(&format!("{}_{}", kind, var_base)))
-        .or_else(|| std::env::var_os(var_base))
 }
 
 fn run(cmd: &mut Command, program: &str) {
