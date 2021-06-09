@@ -46,6 +46,7 @@
 
 extern crate cc;
 
+use std::collections::HashMap;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
@@ -80,6 +81,7 @@ pub struct Config {
     pic: Option<bool>,
     c_cfg: Option<cc::Build>,
     cxx_cfg: Option<cc::Build>,
+    env_cache: HashMap<String, Option<OsString>>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -202,6 +204,7 @@ impl Config {
             pic: None,
             c_cfg: None,
             cxx_cfg: None,
+            env_cache: HashMap::new(),
         }
     }
 
@@ -422,13 +425,13 @@ impl Config {
                 t
             }
         };
+        let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
 
-        let mut generator = self
+        let generator = self
             .generator
             .clone()
-            .or_else(|| std::env::var_os("CMAKE_GENERATOR"));
+            .or_else(|| self.getenv_target_os("CMAKE_GENERATOR"));
 
-        let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let msvc = target.contains("msvc");
         let ndk = self.uses_android_ndk();
         let mut c_cfg = self.c_cfg.clone().unwrap_or_default();
@@ -483,12 +486,16 @@ impl Config {
                 cmake_prefix_path.push(PathBuf::from(root));
             }
         }
-        let system_prefix = env::var_os("CMAKE_PREFIX_PATH").unwrap_or(OsString::new());
+        let system_prefix = self
+            .getenv_target_os("CMAKE_PREFIX_PATH")
+            .unwrap_or(OsString::new());
         cmake_prefix_path.extend(env::split_paths(&system_prefix).map(|s| s.to_owned()));
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
-        let executable = env::var("CMAKE").unwrap_or("cmake".to_owned());
+        let executable = self
+            .getenv_target_os("CMAKE")
+            .unwrap_or(OsString::from("cmake"));
         let mut cmd = Command::new(&executable);
 
         if self.verbose_cmake {
@@ -607,7 +614,7 @@ impl Config {
         if let Some(ref generator) = generator {
             cmd.arg("-G").arg(generator);
         }
-        let profile = self.get_profile();
+        let profile = self.get_profile().to_string();
         for &(ref k, ref v) in &self.defines {
             let mut os = OsString::from("-D");
             os.push(k);
@@ -735,8 +742,10 @@ impl Config {
         }
 
         if !self.defined("CMAKE_TOOLCHAIN_FILE") {
-            if let Ok(s) = env::var("CMAKE_TOOLCHAIN_FILE") {
-                cmd.arg(&format!("-DCMAKE_TOOLCHAIN_FILE={}", s));
+            if let Some(s) = self.getenv_target_os("CMAKE_TOOLCHAIN_FILE") {
+                let mut cmake_toolchain_file = OsString::from("-DCMAKE_TOOLCHAIN_FILE=");
+                cmake_toolchain_file.push(&s);
+                cmd.arg(cmake_toolchain_file);
             }
         }
 
@@ -823,6 +832,32 @@ impl Config {
         return dst;
     }
 
+    fn getenv_os(&mut self, v: &str) -> Option<OsString> {
+        if let Some(val) = self.env_cache.get(v) {
+            return val.clone();
+        }
+        let r = env::var_os(v);
+        println!("{} = {:?}", v, r);
+        self.env_cache.insert(v.to_string(), r.clone());
+        r
+    }
+
+    /// Gets a target-specific environment variable.
+    fn getenv_target_os(&mut self, var_base: &str) -> Option<OsString> {
+        let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
+        let target = self
+            .target
+            .clone()
+            .unwrap_or_else(|| getenv_unwrap("TARGET"));
+
+        let kind = if host == target { "HOST" } else { "TARGET" };
+        let target_u = target.replace("-", "_");
+        self.getenv_os(&format!("{}_{}", var_base, target))
+            .or_else(|| self.getenv_os(&format!("{}_{}", var_base, target_u)))
+            .or_else(|| self.getenv_os(&format!("{}_{}", kind, var_base)))
+            .or_else(|| self.getenv_os(var_base))
+    }
+
     fn visual_studio_generator(&self, target: &str) -> String {
         use cc::windows_registry::{find_vs_version, VsVers};
 
@@ -836,7 +871,7 @@ impl Config {
                  doesn't know how to generate cmake files for it, \
                  can the `cmake` crate be updated?"
             ),
-            Err(msg) => panic!(msg),
+            Err(msg) => panic!("{}", msg),
         };
         if ["i686", "x86_64", "thumbv7a", "aarch64"]
             .iter()
