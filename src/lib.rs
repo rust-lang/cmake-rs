@@ -422,13 +422,13 @@ impl Config {
                 t
             }
         };
+        let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
 
         let mut generator = self
             .generator
             .clone()
-            .or_else(|| std::env::var_os("CMAKE_GENERATOR"));
+            .or_else(|| get_target_env_var(&host, &target, "CMAKE_GENERATOR"));
 
-        let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let msvc = target.contains("msvc");
         let ndk = self.uses_android_ndk();
         let mut c_cfg = self.c_cfg.clone().unwrap_or_default();
@@ -483,12 +483,14 @@ impl Config {
                 cmake_prefix_path.push(PathBuf::from(root));
             }
         }
-        let system_prefix = env::var_os("CMAKE_PREFIX_PATH").unwrap_or(OsString::new());
+        let system_prefix =
+            get_target_env_var(&host, &target, "CMAKE_PREFIX_PATH").unwrap_or(OsString::new());
         cmake_prefix_path.extend(env::split_paths(&system_prefix).map(|s| s.to_owned()));
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
-        let executable = env::var("CMAKE").unwrap_or("cmake".to_owned());
+        let executable =
+            get_target_env_var(&host, &target, "CMAKE").unwrap_or(OsString::from("cmake"));
         let mut cmd = Command::new(&executable);
 
         if self.verbose_cmake {
