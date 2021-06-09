@@ -54,7 +54,6 @@ use std::io::prelude::*;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
 
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
@@ -82,7 +81,7 @@ pub struct Config {
     pic: Option<bool>,
     c_cfg: Option<cc::Build>,
     cxx_cfg: Option<cc::Build>,
-    env_cache: Mutex<HashMap<String, Option<OsString>>>,
+    env_cache: HashMap<String, Option<OsString>>,
 }
 
 /// Builds the native library rooted at `path` with the default cmake options.
@@ -205,7 +204,7 @@ impl Config {
             pic: None,
             c_cfg: None,
             cxx_cfg: None,
-            env_cache: Mutex::new(HashMap::new()),
+            env_cache: HashMap::new(),
         }
     }
 
@@ -615,7 +614,7 @@ impl Config {
         if let Some(ref generator) = generator {
             cmd.arg("-G").arg(generator);
         }
-        let profile = self.get_profile();
+        let profile = self.get_profile().to_string();
         for &(ref k, ref v) in &self.defines {
             let mut os = OsString::from("-D");
             os.push(k);
@@ -833,19 +832,18 @@ impl Config {
         return dst;
     }
 
-    fn getenv_os(&self, v: &str) -> Option<OsString> {
-        let mut cache = self.env_cache.lock().unwrap();
-        if let Some(val) = cache.get(v) {
+    fn getenv_os(&mut self, v: &str) -> Option<OsString> {
+        if let Some(val) = self.env_cache.get(v) {
             return val.clone();
         }
         let r = env::var_os(v);
         println!("{} = {:?}", v, r);
-        cache.insert(v.to_string(), r.clone());
+        self.env_cache.insert(v.to_string(), r.clone());
         r
     }
 
     /// Gets a target-specific environment variable.
-    fn getenv_target_os(&self, var_base: &str) -> Option<OsString> {
+    fn getenv_target_os(&mut self, var_base: &str) -> Option<OsString> {
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
         let target = self
             .target
