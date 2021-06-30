@@ -802,6 +802,8 @@ impl Config {
         // And build!
         let target = self.cmake_target.clone().unwrap_or("install".to_string());
         let mut cmd = Command::new(&executable);
+        cmd.current_dir(&build);
+
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
         }
@@ -816,11 +818,11 @@ impl Config {
             cmd.arg("--target").arg(target);
         }
 
-        cmd.arg("--config")
-            .arg(&profile)
-            .arg("--")
-            .args(&self.build_args)
-            .current_dir(&build);
+        cmd.arg("--config").arg(&profile);
+
+        if !&self.build_args.is_empty() {
+            cmd.arg("--").args(&self.build_args);
+        }
 
         if let Some(flags) = parallel_flags {
             cmd.arg(flags);
