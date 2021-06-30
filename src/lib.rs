@@ -583,13 +583,19 @@ impl Config {
             }
             if !is_ninja && !using_nmake_generator {
                 if target.contains("x86_64") {
-                    cmd.arg("-Thost=x64");
+                    if self.generator_toolset.is_none() {
+                        cmd.arg("-Thost=x64");
+                    }
                     cmd.arg("-Ax64");
                 } else if target.contains("thumbv7a") {
-                    cmd.arg("-Thost=x64");
+                    if self.generator_toolset.is_none() {
+                        cmd.arg("-Thost=x64");
+                    }
                     cmd.arg("-Aarm");
                 } else if target.contains("aarch64") {
-                    cmd.arg("-Thost=x64");
+                    if self.generator_toolset.is_none() {
+                        cmd.arg("-Thost=x64");
+                    }
                     cmd.arg("-AARM64");
                 } else if target.contains("i686") {
                     use cc::windows_registry::{find_vs_version, VsVers};
@@ -598,7 +604,9 @@ impl Config {
                             // 32-bit x86 toolset used to be the default for all hosts,
                             // but Visual Studio 2019 changed the default toolset to match the host,
                             // so we need to manually override it for x86 targets
-                            cmd.arg("-Thost=x86");
+                            if self.generator_toolset.is_none() {
+                                cmd.arg("-Thost=x86");
+                            }
                             cmd.arg("-AWin32");
                         }
                         _ => {}
