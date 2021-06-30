@@ -59,6 +59,7 @@ use std::process::Command;
 pub struct Config {
     path: PathBuf,
     generator: Option<OsString>,
+    generator_toolset: Option<OsString>,
     cflags: OsString,
     cxxflags: OsString,
     asmflags: OsString,
@@ -182,6 +183,7 @@ impl Config {
         Config {
             path: env::current_dir().unwrap().join(path),
             generator: None,
+            generator_toolset: None,
             cflags: OsString::new(),
             cxxflags: OsString::new(),
             asmflags: OsString::new(),
@@ -221,6 +223,15 @@ impl Config {
     /// build target.
     pub fn generator<T: AsRef<OsStr>>(&mut self, generator: T) -> &mut Config {
         self.generator = Some(generator.as_ref().to_owned());
+        self
+    }
+
+    /// Sets the toolset name (-T) if supported by generator.
+    /// Can be used to compile with CLang/LLV instead of msvc when Visual Studio generator is selected.
+    ///
+    /// If unset, will use the default toolset of the selected generator.
+    pub fn generator_toolset<T: AsRef<OsStr>>(&mut self, toolset_name: T) -> &mut Config {
+        self.generator_toolset = Some(toolset_name.as_ref().to_owned());
         self
     }
 
@@ -613,6 +624,9 @@ impl Config {
         }
         if let Some(ref generator) = generator {
             cmd.arg("-G").arg(generator);
+        }
+        if let Some(ref generator_toolset) = self.generator_toolset {
+            cmd.arg("-T").arg(generator_toolset);
         }
         let profile = self.get_profile().to_string();
         for &(ref k, ref v) in &self.defines {
