@@ -779,7 +779,7 @@ impl Config {
 
         if let Ok(s) = env::var("NUM_JOBS") {
             // See https://cmake.org/cmake/help/v3.12/manual/cmake.1.html#build-tool-mode
-            cmd.arg("--parallel").arg(s)
+            cmd.arg("--parallel").arg(s);
         }
 
         if !&self.build_args.is_empty() {
