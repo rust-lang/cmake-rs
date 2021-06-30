@@ -59,6 +59,7 @@ use std::process::Command;
 pub struct Config {
     path: PathBuf,
     generator: Option<OsString>,
+    generator_toolset: Option<OsString>,
     cflags: OsString,
     cxxflags: OsString,
     asmflags: OsString,
@@ -182,6 +183,7 @@ impl Config {
         Config {
             path: env::current_dir().unwrap().join(path),
             generator: None,
+            generator_toolset: None,
             cflags: OsString::new(),
             cxxflags: OsString::new(),
             asmflags: OsString::new(),
@@ -221,6 +223,15 @@ impl Config {
     /// build target.
     pub fn generator<T: AsRef<OsStr>>(&mut self, generator: T) -> &mut Config {
         self.generator = Some(generator.as_ref().to_owned());
+        self
+    }
+
+    /// Sets the toolset name (-T) if supported by generator.
+    /// Can be used to compile with CLang/LLV instead of msvc when Visual Studio generator is selected.
+    ///
+    /// If unset, will use the default toolset of the selected generator.
+    pub fn generator_toolset<T: AsRef<OsStr>>(&mut self, toolset_name: T) -> &mut Config {
+        self.generator_toolset = Some(toolset_name.as_ref().to_owned());
         self
     }
 
@@ -572,13 +583,19 @@ impl Config {
             }
             if !is_ninja && !using_nmake_generator {
                 if target.contains("x86_64") {
-                    cmd.arg("-Thost=x64");
+                    if self.generator_toolset.is_none() {
+                        cmd.arg("-Thost=x64");
+                    }
                     cmd.arg("-Ax64");
                 } else if target.contains("thumbv7a") {
-                    cmd.arg("-Thost=x64");
+                    if self.generator_toolset.is_none() {
+                        cmd.arg("-Thost=x64");
+                    }
                     cmd.arg("-Aarm");
                 } else if target.contains("aarch64") {
-                    cmd.arg("-Thost=x64");
+                    if self.generator_toolset.is_none() {
+                        cmd.arg("-Thost=x64");
+                    }
                     cmd.arg("-AARM64");
                 } else if target.contains("i686") {
                     use cc::windows_registry::{find_vs_version, VsVers};
@@ -587,7 +604,9 @@ impl Config {
                             // 32-bit x86 toolset used to be the default for all hosts,
                             // but Visual Studio 2019 changed the default toolset to match the host,
                             // so we need to manually override it for x86 targets
-                            cmd.arg("-Thost=x86");
+                            if self.generator_toolset.is_none() {
+                                cmd.arg("-Thost=x86");
+                            }
                             cmd.arg("-AWin32");
                         }
                         _ => {}
@@ -613,6 +632,9 @@ impl Config {
         }
         if let Some(ref generator) = generator {
             cmd.arg("-G").arg(generator);
+        }
+        if let Some(ref generator_toolset) = self.generator_toolset {
+            cmd.arg("-T").arg(generator_toolset);
         }
         let profile = self.get_profile().to_string();
         for &(ref k, ref v) in &self.defines {
