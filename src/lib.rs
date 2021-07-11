@@ -769,6 +769,27 @@ impl Config {
             cmd.env(k, v);
         }
 
+        // If the generated project is Makefile based we should carefully transfer corresponding CARGO_MAKEFLAGS
+        if fs::metadata(&build.join("Makefile")).is_ok() {
+            match env::var_os("CARGO_MAKEFLAGS") {
+                // Only do this on non-windows and non-bsd
+                // On Windows, we could be invoking make instead of
+                // mingw32-make which doesn't work with our jobserver
+                // bsdmake also does not work with our job server
+                Some(ref makeflags)
+                    if !(cfg!(windows)
+                        || cfg!(target_os = "openbsd")
+                        || cfg!(target_os = "netbsd")
+                        || cfg!(target_os = "freebsd")
+                        || cfg!(target_os = "bitrig")
+                        || cfg!(target_os = "dragonflybsd")) =>
+                {
+                    cmd.env("MAKEFLAGS", makeflags);
+                }
+                _ => {}
+            }
+        }
+
         cmd.arg("--build").arg(".");
 
         if !self.no_build_target {
