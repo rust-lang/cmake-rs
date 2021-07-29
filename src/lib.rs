@@ -782,54 +782,34 @@ impl Config {
             println!("CMake project was already configured. Skipping configuration step.");
         }
 
-        let mut makeflags = None;
-        let mut parallel_flags = None;
-
-        if let Ok(s) = env::var("NUM_JOBS") {
-            match generator.as_ref().map(|g| g.to_string_lossy()) {
-                Some(ref g) if g.contains("Ninja") => {
-                    parallel_flags = Some(format!("-j{}", s));
-                }
-                Some(ref g) if g.contains("Visual Studio") => {
-                    parallel_flags = Some(format!("/MP{}", s));
-                }
-                Some(ref g) if g.contains("NMake") => {
-                    // NMake creates `Makefile`s, but doesn't understand `-jN`.
-                }
-                _ if fs::metadata(&build.join("Makefile")).is_ok() => {
-                    match env::var_os("CARGO_MAKEFLAGS") {
-                        // Only do this on non-windows and non-bsd
-                        // On Windows, we could be invoking make instead of
-                        // mingw32-make which doesn't work with our jobserver
-                        // bsdmake also does not work with our job server
-                        Some(ref s)
-                            if !(cfg!(windows)
-                                || cfg!(target_os = "openbsd")
-                                || cfg!(target_os = "netbsd")
-                                || cfg!(target_os = "freebsd")
-                                || cfg!(target_os = "bitrig")
-                                || cfg!(target_os = "dragonflybsd")) =>
-                        {
-                            makeflags = Some(s.clone())
-                        }
-
-                        // This looks like `make`, let's hope it understands `-jN`.
-                        _ => makeflags = Some(OsString::from(format!("-j{}", s))),
-                    }
-                }
-                _ => {}
-            }
-        }
-
         // And build!
         let target = self.cmake_target.clone().unwrap_or("install".to_string());
         let mut cmd = Command::new(&executable);
+        cmd.current_dir(&build);
+
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
         }
 
-        if let Some(flags) = makeflags {
-            cmd.env("MAKEFLAGS", flags);
+        // If the generated project is Makefile based we should carefully transfer corresponding CARGO_MAKEFLAGS
+        if fs::metadata(&build.join("Makefile")).is_ok() {
+            match env::var_os("CARGO_MAKEFLAGS") {
+                // Only do this on non-windows and non-bsd
+                // On Windows, we could be invoking make instead of
+                // mingw32-make which doesn't work with our jobserver
+                // bsdmake also does not work with our job server
+                Some(ref makeflags)
+                    if !(cfg!(windows)
+                        || cfg!(target_os = "openbsd")
+                        || cfg!(target_os = "netbsd")
+                        || cfg!(target_os = "freebsd")
+                        || cfg!(target_os = "bitrig")
+                        || cfg!(target_os = "dragonflybsd")) =>
+                {
+                    cmd.env("MAKEFLAGS", makeflags);
+                }
+                _ => {}
+            }
         }
 
         cmd.arg("--build").arg(".");
@@ -838,14 +818,15 @@ impl Config {
             cmd.arg("--target").arg(target);
         }
 
-        cmd.arg("--config")
-            .arg(&profile)
-            .arg("--")
-            .args(&self.build_args)
-            .current_dir(&build);
+        cmd.arg("--config").arg(&profile);
 
-        if let Some(flags) = parallel_flags {
-            cmd.arg(flags);
+        if let Ok(s) = env::var("NUM_JOBS") {
+            // See https://cmake.org/cmake/help/v3.12/manual/cmake.1.html#build-tool-mode
+            cmd.arg("--parallel").arg(s);
+        }
+
+        if !&self.build_args.is_empty() {
+            cmd.arg("--").args(&self.build_args);
         }
 
         run(&mut cmd, "cmake");
