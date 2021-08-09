@@ -569,6 +569,18 @@ impl Config {
                         }
                     }
                 }
+                if !self.defined("CMAKE_AR") {
+                    let exe = find_exe(c_compiler.path());
+                    if let Some(name) = exe.file_name().unwrap().to_str() {
+                        let name = name.replace("gcc", "ar");
+                        let ar = exe.with_file_name(name);
+                        if ar.is_file() {
+                            let mut arg = OsString::from("-DCMAKE_AR=");
+                            arg.push(&ar);
+                            cmd.arg(arg);
+                        }
+                    }
+                }
             }
         } else if msvc {
             // If we're on MSVC we need to be sure to use the right generator or
