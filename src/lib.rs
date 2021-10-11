@@ -438,6 +438,14 @@ impl Config {
         };
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
 
+        // Some decisions later on are made if CMAKE_TOOLCHAIN_FILE is defined,
+        // so we need to read it from the environment variables from the beginning.
+        if !self.defined("CMAKE_TOOLCHAIN_FILE") {
+            if let Some(s) = self.getenv_target_os("CMAKE_TOOLCHAIN_FILE") {
+                self.define("CMAKE_TOOLCHAIN_FILE", s);
+            }
+        }
+
         let generator = self
             .generator
             .clone()
@@ -761,14 +769,6 @@ impl Config {
 
         if self.verbose_make {
             cmd.arg("-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON");
-        }
-
-        if !self.defined("CMAKE_TOOLCHAIN_FILE") {
-            if let Some(s) = self.getenv_target_os("CMAKE_TOOLCHAIN_FILE") {
-                let mut cmake_toolchain_file = OsString::from("-DCMAKE_TOOLCHAIN_FILE=");
-                cmake_toolchain_file.push(&s);
-                cmd.arg(cmake_toolchain_file);
-            }
         }
 
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
