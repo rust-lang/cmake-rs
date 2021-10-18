@@ -50,7 +50,7 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
-use std::io::prelude::*;
+use std::io::{self, prelude::*};
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -821,9 +821,10 @@ impl Config {
         cmd.arg("--config").arg(&profile);
 
         if let Ok(s) = env::var("NUM_JOBS") {
-            let cmake_version = cmake_version();
-            if (cmake_version.0 > 3) || (cmake_version.0 == 3 && cmake_version.1 >= 12) {
-                cmd.arg("--parallel").arg(s);
+            if let Ok(cmake_version) = cmake_version(&executable) {
+                if (cmake_version.0 > 3) || (cmake_version.0 == 3 && cmake_version.1 >= 12) {
+                    cmd.arg("--parallel").arg(s);
+                }
             }
         }
 
@@ -977,11 +978,14 @@ fn fail(s: &str) -> ! {
 }
 
 // Returns the major, minor and patch versions of cmake
-fn cmake_version() -> (u8, u8, u8) {
-    let cmd = Command::new("cmake").arg("--version").output().unwrap();
+fn cmake_version(executable: &OsStr) -> io::Result<(u8, u8, u8)> {
+    let cmd = Command::new(executable).arg("--version").output()?;
     let version = String::from_utf8_lossy(&cmd.stdout);
     let version: Vec<&str> = version.split_whitespace().collect();
     let version: Vec<&str> = version[2].split('.').collect();
-    let version: Vec<u8> = version.iter().map(|c| c.parse().unwrap()).collect();
-    (version[0], version[1], version[2])
+    let version: Vec<u8> = version
+        .iter()
+        .map(|c| c.parse().unwrap_or_default())
+        .collect();
+    Ok((version[0], version[1], version[2]))
 }
