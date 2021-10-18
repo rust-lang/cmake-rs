@@ -50,8 +50,8 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
+use std::io::prelude::*;
 use std::io::ErrorKind;
-use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -431,7 +431,7 @@ impl Config {
             None => {
                 let mut t = getenv_unwrap("TARGET");
                 if t.ends_with("-darwin") && self.uses_cxx11 {
-                    t += "11"
+                    t = t + "11"
                 }
                 t
             }
@@ -507,14 +507,14 @@ impl Config {
         }
         let system_prefix = self
             .getenv_target_os("CMAKE_PREFIX_PATH")
-            .unwrap_or_default();
-        cmake_prefix_path.extend(env::split_paths(&system_prefix));
+            .unwrap_or(OsString::new());
+        cmake_prefix_path.extend(env::split_paths(&system_prefix).map(|s| s.to_owned()));
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
         let executable = self
             .getenv_target_os("CMAKE")
-            .unwrap_or_else(|| OsString::from("cmake"));
+            .unwrap_or(OsString::from("cmake"));
         let mut cmd = Command::new(&executable);
 
         if self.verbose_cmake {
@@ -607,15 +607,18 @@ impl Config {
                     cmd.arg("-AARM64");
                 } else if target.contains("i686") {
                     use cc::windows_registry::{find_vs_version, VsVers};
-                    if let Ok(VsVers::Vs16) = find_vs_version() {
-                        // 32-bit x86 toolset used to be the default for all hosts,
-                        // but Visual Studio 2019 changed the default toolset to match the host,
-                        // so we need to manually override it for x86 targets
-                        if self.generator_toolset.is_none() {
-                            cmd.arg("-Thost=x86");
+                    match find_vs_version() {
+                        Ok(VsVers::Vs16) => {
+                            // 32-bit x86 toolset used to be the default for all hosts,
+                            // but Visual Studio 2019 changed the default toolset to match the host,
+                            // so we need to manually override it for x86 targets
+                            if self.generator_toolset.is_none() {
+                                cmd.arg("-Thost=x86");
+                            }
+                            cmd.arg("-AWin32");
                         }
-                        cmd.arg("-AWin32");
-                    }
+                        _ => {}
+                    };
                 } else {
                     panic!("unsupported msvc target: {}", target);
                 }
@@ -780,10 +783,7 @@ impl Config {
         }
 
         // And build!
-        let target = self
-            .cmake_target
-            .clone()
-            .unwrap_or_else(|| "install".to_string());
+        let target = self.cmake_target.clone().unwrap_or("install".to_string());
         let mut cmd = Command::new(&executable);
         cmd.current_dir(&build);
 
@@ -808,7 +808,11 @@ impl Config {
                 {
                     cmd.env("MAKEFLAGS", makeflags);
                 }
-                _ => {}
+                _ => {
+                    if let Ok(s) = env::var("NUM_JOBS") {
+                        cmd.env("MAKEFLAGS", format!("-j{}", s));
+                    }
+                }
             }
         }
 
@@ -835,7 +839,7 @@ impl Config {
         run(&mut cmd, "cmake");
 
         println!("cargo:root={}", dst.display());
-        dst
+        return dst;
     }
 
     fn getenv_os(&mut self, v: &str) -> Option<OsString> {
@@ -905,7 +909,7 @@ impl Config {
         // CMake will apparently store canonicalized paths which normally
         // isn't relevant to us but we canonicalize it here to ensure
         // we're both checking the same thing.
-        let path = fs::canonicalize(&self.path).unwrap_or_else(|_| self.path.clone());
+        let path = fs::canonicalize(&self.path).unwrap_or(self.path.clone());
         let mut f = match File::open(dir.join("CMakeCache.txt")) {
             Ok(f) => f,
             Err(..) => return,
@@ -960,10 +964,10 @@ fn run(cmd: &mut Command, program: &str) {
 }
 
 fn find_exe(path: &Path) -> PathBuf {
-    env::split_paths(&env::var_os("PATH").unwrap_or_default())
+    env::split_paths(&env::var_os("PATH").unwrap_or(OsString::new()))
         .map(|p| p.join(path))
         .find(|p| fs::metadata(p).is_ok())
-        .unwrap_or_else(|| path.to_owned())
+        .unwrap_or(path.to_owned())
 }
 
 fn getenv_unwrap(v: &str) -> String {
@@ -978,14 +982,15 @@ fn fail(s: &str) -> ! {
 }
 
 // Returns the major, minor and patch versions of cmake
-fn cmake_version(executable: &OsStr) -> io::Result<(u8, u8, u8)> {
+fn cmake_version(executable: &OsStr) -> Result<(u8, u8, u8), Box<dyn std::error::Error>> {
     let cmd = Command::new(executable).arg("--version").output()?;
     let version = String::from_utf8_lossy(&cmd.stdout);
     let version: Vec<&str> = version.split_whitespace().collect();
     let version: Vec<&str> = version[2].split('.').collect();
-    let version: Vec<u8> = version
-        .iter()
-        .map(|c| c.parse().unwrap_or_default())
-        .collect();
-    Ok((version[0], version[1], version[2]))
+    let mut temp = vec![];
+    for i in version.iter() {
+        let curr = i.parse()?;
+        temp.push(curr);
+    }
+    Ok((temp[0], temp[1], temp[2]))
 }
