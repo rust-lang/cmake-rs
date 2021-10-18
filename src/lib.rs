@@ -50,8 +50,8 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, File};
-use std::io::{self, prelude::*};
 use std::io::ErrorKind;
+use std::io::{self, prelude::*};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
