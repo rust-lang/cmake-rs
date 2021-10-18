@@ -810,7 +810,9 @@ impl Config {
                 }
                 _ => {
                     if let Ok(s) = env::var("NUM_JOBS") {
-                        cmd.env("MAKEFLAGS", format!("-j{}", s));
+                        if !cmake_has_parallel(&executable) {
+                            cmd.env("MAKEFLAGS", format!("-j{}", s));
+                        }
                     }
                 }
             }
@@ -825,10 +827,8 @@ impl Config {
         cmd.arg("--config").arg(&profile);
 
         if let Ok(s) = env::var("NUM_JOBS") {
-            if let Ok(cmake_version) = cmake_version(&executable) {
-                if (cmake_version.0 > 3) || (cmake_version.0 == 3 && cmake_version.1 >= 12) {
-                    cmd.arg("--parallel").arg(s);
-                }
+            if cmake_has_parallel(&executable) {
+                cmd.arg("--parallel").arg(s);
             }
         }
 
@@ -993,4 +993,16 @@ fn cmake_version(executable: &OsStr) -> Result<(u8, u8, u8), Box<dyn std::error:
         temp.push(curr);
     }
     Ok((temp[0], temp[1], temp[2]))
+}
+
+fn cmake_has_parallel(executable: &OsStr) -> bool {
+    if let Ok(cmake_version) = cmake_version(&executable) {
+        if (cmake_version.0 > 3) || (cmake_version.0 == 3 && cmake_version.1 >= 12) {
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    }
 }
