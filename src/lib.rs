@@ -808,13 +808,7 @@ impl Config {
                 {
                     cmd.env("MAKEFLAGS", makeflags);
                 }
-                _ => {
-                    if let Ok(s) = env::var("NUM_JOBS") {
-                        if !cmake_has_parallel(&executable) {
-                            cmd.env("MAKEFLAGS", format!("-j{}", s));
-                        }
-                    }
-                }
+                _ => {}
             }
         }
 
@@ -829,6 +823,9 @@ impl Config {
         if let Ok(s) = env::var("NUM_JOBS") {
             if cmake_has_parallel(&executable) {
                 cmd.arg("--parallel").arg(s);
+            } else {
+                println!("cargo:warning=The parallel flag wasn't passed to CMake!");
+                cmd.env("MAKEFLAGS", format!("-j{}", s));
             }
         }
 
@@ -982,27 +979,29 @@ fn fail(s: &str) -> ! {
 }
 
 // Returns the major, minor and patch versions of cmake
-fn cmake_version(executable: &OsStr) -> Result<(u8, u8, u8), Box<dyn std::error::Error>> {
-    let cmd = Command::new(executable).arg("--version").output()?;
+fn cmake_version(executable: &OsStr) -> Option<(u8, u8, u8)> {
+    let cmd = Command::new(executable).arg("--version").output().ok()?;
     let version = String::from_utf8_lossy(&cmd.stdout);
     let version: Vec<&str> = version.split_whitespace().collect();
     let version: Vec<&str> = version[2].split('.').collect();
     let mut temp = vec![];
     for i in version.iter() {
-        let curr = i.parse()?;
+        let curr = i.parse().ok()?;
         temp.push(curr);
     }
-    Ok((temp[0], temp[1], temp[2]))
+    Some((temp[0], temp[1], temp[2]))
 }
 
+// Check if cmake has the --parallel flag by checking against version 3.12
 fn cmake_has_parallel(executable: &OsStr) -> bool {
-    if let Ok(cmake_version) = cmake_version(&executable) {
-        if (cmake_version.0 > 3) || (cmake_version.0 == 3 && cmake_version.1 >= 12) {
+    if let Some(cmake_version) = cmake_version(&executable) {
+        if cmake_version >= (3, 12, 0) {
             true
         } else {
             false
         }
     } else {
+        println!("cargo:warning=cmake-rs might have failed at parsing the version output!");
         false
     }
 }
