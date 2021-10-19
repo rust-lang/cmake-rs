@@ -791,6 +791,13 @@ impl Config {
             cmd.env(k, v);
         }
 
+        let cmake_has_parallel = cmake_has_parallel(&executable);
+        let num_jobs = if let Ok(s) = env::var("NUM_JOBS") {
+            s.parse().unwrap_or(1)
+        } else {
+            1
+        };
+
         // If the generated project is Makefile based we should carefully transfer corresponding CARGO_MAKEFLAGS
         if fs::metadata(&build.join("Makefile")).is_ok() {
             match env::var_os("CARGO_MAKEFLAGS") {
@@ -808,7 +815,12 @@ impl Config {
                 {
                     cmd.env("MAKEFLAGS", makeflags);
                 }
-                _ => {}
+                _ => {
+                    if !cmake_has_parallel && num_jobs > 1 {
+                        println!("cargo:warning=The parallel flag was not passed to CMake since the detected version is below 3.12!");
+                        cmd.env("MAKEFLAGS", format!("-j{}", num_jobs));
+                    }
+                }
             }
         }
 
@@ -820,13 +832,8 @@ impl Config {
 
         cmd.arg("--config").arg(&profile);
 
-        if let Ok(s) = env::var("NUM_JOBS") {
-            if cmake_has_parallel(&executable) {
-                cmd.arg("--parallel").arg(s);
-            } else {
-                println!("cargo:warning=The parallel flag wasn't passed to CMake!");
-                cmd.env("MAKEFLAGS", format!("-j{}", s));
-            }
+        if num_jobs > 1 && cmake_has_parallel {
+            cmd.arg("--parallel").arg(num_jobs.to_string());
         }
 
         if !&self.build_args.is_empty() {
@@ -998,6 +1005,10 @@ fn cmake_has_parallel(executable: &OsStr) -> bool {
         if cmake_version >= (3, 12, 0) {
             true
         } else {
+            println!(
+                "cargo:warning=CMake version {}.{}.{} detected, No parallel flag will be passed!",
+                cmake_version.0, cmake_version.1, cmake_version.2
+            );
             false
         }
     } else {
