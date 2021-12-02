@@ -637,6 +637,10 @@ impl Config {
                 cmd.arg("-DCMAKE_OSX_SYSROOT=/");
                 cmd.arg("-DCMAKE_OSX_DEPLOYMENT_TARGET=");
             }
+        } else if target.contains("linux") {
+            if !self.defined("CMAKE_SYSTEM_NAME") {
+                cmd.arg("-DCMAKE_SYSTEM_NAME=Linux");
+            }
         }
         if let Some(ref generator) = generator {
             cmd.arg("-G").arg(generator);
