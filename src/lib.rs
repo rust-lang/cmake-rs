@@ -512,7 +512,7 @@ impl Config {
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
-        let mut cmd = self.cmake_configure_command();
+        let mut cmd = self.cmake_configure_command(&target);
 
         if self.verbose_cmake {
             cmd.arg("-Wdev");
@@ -784,7 +784,7 @@ impl Config {
         }
 
         // And build!
-        let mut cmd = self.cmake_build_command();
+        let mut cmd = self.cmake_build_command(&target);
         cmd.current_dir(&build);
 
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
@@ -841,12 +841,34 @@ impl Config {
             .unwrap_or(OsString::from("cmake"))
     }
 
-    fn cmake_configure_command(&mut self) -> Command {
-        Command::new(self.cmake_executable())
+    // If we are building for Emscripten, wrap the calls to CMake
+    // as "emcmake cmake ..." and "emmake cmake --build ...".
+    // https://emscripten.org/docs/compiling/Building-Projects.html
+
+    fn cmake_configure_command(&mut self, target: &str) -> Command {
+        if target.contains("emscripten") {
+            let emcmake = self
+                .getenv_target_os("EMCMAKE")
+                .unwrap_or(OsString::from("emcmake"));
+            let mut cmd = Command::new(emcmake);
+            cmd.arg(self.cmake_executable());
+            cmd
+        } else {
+            Command::new(self.cmake_executable())
+        }
     }
 
-    fn cmake_build_command(&mut self) -> Command {
-        Command::new(self.cmake_executable())
+    fn cmake_build_command(&mut self, target: &str) -> Command {
+        if target.contains("emscripten") {
+            let emmake = self
+                .getenv_target_os("EMMAKE")
+                .unwrap_or(OsString::from("emmake"));
+            let mut cmd = Command::new(emmake);
+            cmd.arg(self.cmake_executable());
+            cmd
+        } else {
+            Command::new(self.cmake_executable())
+        }
     }
 
     fn getenv_os(&mut self, v: &str) -> Option<OsString> {
