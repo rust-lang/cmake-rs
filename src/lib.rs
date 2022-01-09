@@ -787,7 +787,6 @@ impl Config {
         }
 
         // And build!
-        let target = self.cmake_target.clone().unwrap_or("install".to_string());
         let mut cmd = Command::new(&executable);
         cmd.current_dir(&build);
 
@@ -819,6 +818,7 @@ impl Config {
         cmd.arg("--build").arg(".");
 
         if !self.no_build_target {
+            let target = self.cmake_target.clone().unwrap_or("install".to_string());
             cmd.arg("--target").arg(target);
         }
 
