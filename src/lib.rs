@@ -512,10 +512,7 @@ impl Config {
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
-        let executable = self
-            .getenv_target_os("CMAKE")
-            .unwrap_or(OsString::from("cmake"));
-        let mut cmd = Command::new(&executable);
+        let mut cmd = self.cmake_configure_command();
 
         if self.verbose_cmake {
             cmd.arg("-Wdev");
@@ -787,7 +784,7 @@ impl Config {
         }
 
         // And build!
-        let mut cmd = Command::new(&executable);
+        let mut cmd = self.cmake_build_command();
         cmd.current_dir(&build);
 
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
@@ -837,6 +834,19 @@ impl Config {
 
         println!("cargo:root={}", dst.display());
         return dst;
+    }
+
+    fn cmake_executable(&mut self) -> OsString {
+        self.getenv_target_os("CMAKE")
+            .unwrap_or(OsString::from("cmake"))
+    }
+
+    fn cmake_configure_command(&mut self) -> Command {
+        Command::new(self.cmake_executable())
+    }
+
+    fn cmake_build_command(&mut self) -> Command {
+        Command::new(self.cmake_executable())
     }
 
     fn getenv_os(&mut self, v: &str) -> Option<OsString> {
