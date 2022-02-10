@@ -12,6 +12,16 @@ jobs:
     - uses: actions/checkout@master
     - name: Install Rust
       run: rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
+    - name: Check versions
+      run: |
+          set -e
+          cargo --version
+          rustc --version
+          cmake --version
+          gcc --version
+          clang --version
+          echo "end of versions checking"
+      shell: bash
     - run: cargo test
 
   rustfmt:
