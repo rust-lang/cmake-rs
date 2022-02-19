@@ -606,19 +606,10 @@ impl Config {
                     }
                     cmd.arg("-AARM64");
                 } else if target.contains("i686") {
-                    use cc::windows_registry::{find_vs_version, VsVers};
-                    match find_vs_version() {
-                        Ok(VsVers::Vs16) => {
-                            // 32-bit x86 toolset used to be the default for all hosts,
-                            // but Visual Studio 2019 changed the default toolset to match the host,
-                            // so we need to manually override it for x86 targets
-                            if self.generator_toolset.is_none() {
-                                cmd.arg("-Thost=x86");
-                            }
-                            cmd.arg("-AWin32");
-                        }
-                        _ => {}
-                    };
+                    if self.generator_toolset.is_none() {
+                        cmd.arg("-Thost=x86");
+                    }
+                    cmd.arg("-AWin32");
                 } else {
                     panic!("unsupported msvc target: {}", target);
                 }
