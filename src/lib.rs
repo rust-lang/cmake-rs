@@ -514,6 +514,7 @@ impl Config {
         // Build up the first cmake command to build the build system.
         let executable = self
             .getenv_target_os("CMAKE")
+            .or_else(|| find_cmake_executable(&target))
             .unwrap_or(OsString::from("cmake"));
         let mut cmd = Command::new(&executable);
 
@@ -964,4 +965,29 @@ fn getenv_unwrap(v: &str) -> String {
 
 fn fail(s: &str) -> ! {
     panic!("\n{}\n\nbuild script failed, must exit now", s)
+}
+
+#[cfg(windows)]
+fn find_cmake_executable(target: &str) -> Option<OsString> {
+    use cc::windows_registry::find_tool;
+
+    // Try to find cmake.exe bundled with MSVC, but only if there isn't another one in path
+    let cmake_in_path = env::split_paths(&env::var_os("PATH").unwrap_or(OsString::new()))
+        .any(|p| p.join("cmake.exe").exists());
+    if cmake_in_path {
+        None
+    } else {
+        find_tool(target, "devenv").and_then(|t| {
+            t.path()
+                .join("..\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe")
+                .canonicalize()
+                .ok()
+                .map(OsString::from)
+        })
+    }
+}
+
+#[cfg(not(windows))]
+fn find_cmake_executable(target: &str) -> Option<OsString> {
+    None
 }
