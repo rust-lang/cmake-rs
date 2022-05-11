@@ -431,7 +431,7 @@ impl Config {
             None => {
                 let mut t = getenv_unwrap("TARGET");
                 if t.ends_with("-darwin") && self.uses_cxx11 {
-                    t = t + "11"
+                    t += "11"
                 }
                 t
             }
@@ -507,14 +507,14 @@ impl Config {
         }
         let system_prefix = self
             .getenv_target_os("CMAKE_PREFIX_PATH")
-            .unwrap_or(OsString::new());
-        cmake_prefix_path.extend(env::split_paths(&system_prefix).map(|s| s.to_owned()));
+            .unwrap_or_default();
+        cmake_prefix_path.extend(env::split_paths(&system_prefix));
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
         let executable = self
             .getenv_target_os("CMAKE")
-            .unwrap_or(OsString::from("cmake"));
+            .unwrap_or_else(|| OsString::from("cmake"));
         let mut cmd = Command::new(&executable);
 
         if self.verbose_cmake {
@@ -582,13 +582,14 @@ impl Config {
             // If we're on MSVC we need to be sure to use the right generator or
             // otherwise we won't get 32/64 bit correct automatically.
             // This also guarantees that NMake generator isn't chosen implicitly.
-            let using_nmake_generator;
-            if generator.is_none() {
-                cmd.arg("-G").arg(self.visual_studio_generator(&target));
-                using_nmake_generator = false;
-            } else {
-                using_nmake_generator = generator.as_ref().unwrap() == "NMake Makefiles";
-            }
+            let using_nmake_generator = {
+                if generator.is_none() {
+                    cmd.arg("-G").arg(self.visual_studio_generator(&target));
+                    false
+                } else {
+                    generator.as_ref().unwrap() == "NMake Makefiles"
+                }
+            };
             if !is_ninja && !using_nmake_generator {
                 if target.contains("x86_64") {
                     if self.generator_toolset.is_none() {
@@ -774,7 +775,10 @@ impl Config {
         }
 
         // And build!
-        let target = self.cmake_target.clone().unwrap_or("install".to_string());
+        let target = self
+            .cmake_target
+            .clone()
+            .unwrap_or_else(|| "install".to_string());
         let mut cmd = Command::new(&executable);
         cmd.current_dir(&build);
 
@@ -823,7 +827,7 @@ impl Config {
         run(&mut cmd, "cmake");
 
         println!("cargo:root={}", dst.display());
-        return dst;
+        dst
     }
 
     fn getenv_os(&mut self, v: &str) -> Option<OsString> {
@@ -845,7 +849,7 @@ impl Config {
             .unwrap_or_else(|| getenv_unwrap("TARGET"));
 
         let kind = if host == target { "HOST" } else { "TARGET" };
-        let target_u = target.replace("-", "_");
+        let target_u = target.replace('-', "_");
         self.getenv_os(&format!("{}_{}", var_base, target))
             .or_else(|| self.getenv_os(&format!("{}_{}", var_base, target_u)))
             .or_else(|| self.getenv_os(&format!("{}_{}", kind, var_base)))
@@ -894,7 +898,7 @@ impl Config {
         // CMake will apparently store canonicalized paths which normally
         // isn't relevant to us but we canonicalize it here to ensure
         // we're both checking the same thing.
-        let path = fs::canonicalize(&self.path).unwrap_or(self.path.clone());
+        let path = fs::canonicalize(&self.path).unwrap_or_else(|_| self.path.clone());
         let mut f = match File::open(dir.join("CMakeCache.txt")) {
             Ok(f) => f,
             Err(..) => return,
@@ -949,10 +953,10 @@ fn run(cmd: &mut Command, program: &str) {
 }
 
 fn find_exe(path: &Path) -> PathBuf {
-    env::split_paths(&env::var_os("PATH").unwrap_or(OsString::new()))
+    env::split_paths(&env::var_os("PATH").unwrap_or_default())
         .map(|p| p.join(path))
         .find(|p| fs::metadata(p).is_ok())
-        .unwrap_or(path.to_owned())
+        .unwrap_or_else(|| path.to_owned())
 }
 
 fn getenv_unwrap(v: &str) -> String {
