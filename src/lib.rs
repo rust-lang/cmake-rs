@@ -55,6 +55,50 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+#[derive(PartialEq,Debug)]
+struct Version {
+    major: u32,
+    minor: u32,
+    patch: u32,
+    tweak: u32
+}
+
+impl Version {
+    fn parse(cmake_output_line: &str) -> Option<Version> {
+        let my_line = String::from(cmake_output_line);
+        let output_line_split : Vec<&str> = my_line.split(' ').collect();
+        if output_line_split.len() == 3 &&
+            output_line_split[0] == "cmake" &&
+            output_line_split[1] == "version" {
+
+            let cmake_version_split : Vec<&str> = output_line_split[2].split('.').collect();
+            if cmake_version_split.len() >= 2 {
+                if let Ok(major) = cmake_version_split[0].parse::<u32>() {
+                    if let Ok(minor) = cmake_version_split[1].parse::<u32>() {
+                        let mut patch = 0;
+                        let mut tweak = 0;
+
+                        if cmake_version_split.len() >= 3 {
+                            if let Ok(x) = cmake_version_split[2].parse::<u32>() {
+                                patch = x;
+                            }
+                        }
+                        if cmake_version_split.len() >= 4 {
+                            if let Ok(x) = cmake_version_split[3].parse::<u32>() {
+                                tweak = x;
+                            }
+                        }
+                        return Some(Version { major, minor, patch, tweak });
+                    }
+                }
+            }
+        }
+        None
+    }
+}
+
+
+
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
     path: PathBuf,
@@ -419,6 +463,7 @@ impl Config {
         self.cxx_cfg = Some(cxx_cfg);
         self
     }
+
 
     /// Run this configuration, compiling the library with all the configured
     /// options.
@@ -813,8 +858,17 @@ impl Config {
         cmd.arg("--config").arg(&profile);
 
         if let Ok(s) = env::var("NUM_JOBS") {
-            // See https://cmake.org/cmake/help/v3.12/manual/cmake.1.html#build-tool-mode
-            cmd.arg("--parallel").arg(s);
+            match self.cmake_version() {
+                Some(Version { major: mjr, minor: mnr, .. }) if mjr < 3 || (mjr == 3 && mnr < 12) => {
+                    // Is there a viable alternative for older cmake versions?
+                    // Support for this environment variable was also added in Cmake 3.12, but at least the build won't fail.
+                    cmd.env("CMAKE_BUILD_PARALLEL_LEVEL", s);
+                },
+                _ => {
+                    // See https://cmake.org/cmake/help/v3.12/manual/cmake.1.html#build-tool-mode
+                    cmd.arg("--parallel").arg(s);
+                }
+            }
         }
 
         if !&self.build_args.is_empty() {
@@ -825,6 +879,21 @@ impl Config {
 
         println!("cargo:root={}", dst.display());
         dst
+    }
+
+    fn cmake_version(&mut self) -> Option<Version> {
+        let mut cmd = Command::new(self.cmake_executable());
+        cmd.arg("--version");
+        if let Ok(raw_output) = cmd.output() {
+            if let Ok(output) = String::from_utf8(raw_output.stdout) {
+                for line in output.lines() {
+                    if let Some(version) = Version::parse(line) {
+                        return Some(version);
+                    }
+                }
+            }
+        }
+        None
     }
 
     fn cmake_executable(&mut self) -> OsString {
@@ -1000,4 +1069,17 @@ fn getenv_unwrap(v: &str) -> String {
 
 fn fail(s: &str) -> ! {
     panic!("\n{}\n\nbuild script failed, must exit now", s)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::Version;
+
+    #[test]
+    fn test_version_line_parsing() {
+        assert_eq!(Version::parse("cmake version 2.8.12.2"),
+                   Some(Version { major: 2, minor: 8, patch: 12, tweak: 2 }));
+        assert_eq!(Version::parse("cmake version 3.23.1"),
+                   Some(Version { major: 3, minor: 23, patch: 1, tweak: 0 }));
+    }
 }
