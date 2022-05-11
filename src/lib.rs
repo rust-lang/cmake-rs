@@ -512,10 +512,7 @@ impl Config {
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
-        let executable = self
-            .getenv_target_os("CMAKE")
-            .unwrap_or_else(|| OsString::from("cmake"));
-        let mut cmd = Command::new(&executable);
+        let mut cmd = self.cmake_configure_command(&target);
 
         if self.verbose_cmake {
             cmd.arg("-Wdev");
@@ -775,11 +772,7 @@ impl Config {
         }
 
         // And build!
-        let target = self
-            .cmake_target
-            .clone()
-            .unwrap_or_else(|| "install".to_string());
-        let mut cmd = Command::new(&executable);
+        let mut cmd = self.cmake_build_command(&target);
         cmd.current_dir(&build);
 
         for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
@@ -810,6 +803,10 @@ impl Config {
         cmd.arg("--build").arg(".");
 
         if !self.no_build_target {
+            let target = self
+                .cmake_target
+                .clone()
+                .unwrap_or_else(|| "install".to_string());
             cmd.arg("--target").arg(target);
         }
 
@@ -828,6 +825,41 @@ impl Config {
 
         println!("cargo:root={}", dst.display());
         dst
+    }
+
+    fn cmake_executable(&mut self) -> OsString {
+        self.getenv_target_os("CMAKE")
+            .unwrap_or_else(|| OsString::from("cmake"))
+    }
+
+    // If we are building for Emscripten, wrap the calls to CMake
+    // as "emcmake cmake ..." and "emmake cmake --build ...".
+    // https://emscripten.org/docs/compiling/Building-Projects.html
+
+    fn cmake_configure_command(&mut self, target: &str) -> Command {
+        if target.contains("emscripten") {
+            let emcmake = self
+                .getenv_target_os("EMCMAKE")
+                .unwrap_or_else(|| OsString::from("emcmake"));
+            let mut cmd = Command::new(emcmake);
+            cmd.arg(self.cmake_executable());
+            cmd
+        } else {
+            Command::new(self.cmake_executable())
+        }
+    }
+
+    fn cmake_build_command(&mut self, target: &str) -> Command {
+        if target.contains("emscripten") {
+            let emmake = self
+                .getenv_target_os("EMMAKE")
+                .unwrap_or_else(|| OsString::from("emmake"));
+            let mut cmd = Command::new(emmake);
+            cmd.arg(self.cmake_executable());
+            cmd
+        } else {
+            Command::new(self.cmake_executable())
+        }
     }
 
     fn getenv_os(&mut self, v: &str) -> Option<OsString> {
