@@ -514,6 +514,8 @@ impl Config {
         // Build up the first cmake command to build the build system.
         let mut cmd = self.cmake_configure_command(&target);
 
+        let version = Version::from_command(cmd.get_program()).unwrap_or_default();
+
         if self.verbose_cmake {
             cmd.arg("-Wdev");
             cmd.arg("--debug-output");
@@ -812,9 +814,13 @@ impl Config {
 
         cmd.arg("--config").arg(&profile);
 
-        if let Ok(s) = env::var("NUM_JOBS") {
-            // See https://cmake.org/cmake/help/v3.12/manual/cmake.1.html#build-tool-mode
-            cmd.arg("--parallel").arg(s);
+        // --parallel requires CMake 3.12:
+        // https://cmake.org/cmake/help/latest/release/3.12.html#command-line
+        if version >= Version::new(3, 12) {
+            if let Ok(s) = env::var("NUM_JOBS") {
+                // See https://cmake.org/cmake/help/v3.12/manual/cmake.1.html#build-tool-mode
+                cmd.arg("--parallel").arg(s);
+            }
         }
 
         if !&self.build_args.is_empty() {
@@ -964,6 +970,52 @@ impl Config {
     }
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Version {
+    major: u32,
+    minor: u32,
+}
+
+impl Version {
+    fn new(major: u32, minor: u32) -> Self {
+        Self { major, minor }
+    }
+
+    fn parse(s: &str) -> Option<Self> {
+        // As of 3.22, the format of the version output is "cmake version <major>.<minor>.<patch>".
+        // ```
+        // $ cmake --version
+        // cmake version 3.22.2
+        //
+        // CMake suite maintained and supported by Kitware (kitware.com/cmake).
+        // ```
+        let version = s.lines().next()?.strip_prefix("cmake version ")?;
+        let mut digits = version.splitn(3, '.'); // split version string to major minor patch
+        let major = digits.next()?.parse::<u32>().ok()?;
+        let minor = digits.next()?.parse::<u32>().ok()?;
+        // Ignore the patch version because it does not change the API.
+        Some(Version::new(major, minor))
+    }
+
+    fn from_command(executable: &OsStr) -> Option<Self> {
+        let output = Command::new(executable).arg("--version").output().ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        let stdout = core::str::from_utf8(&output.stdout).ok()?;
+        Self::parse(stdout)
+    }
+}
+
+impl Default for Version {
+    fn default() -> Self {
+        // If the version parsing fails, we assume that it is the latest known
+        // version. This is because the failure of version parsing may be due to
+        // the version output being changed.
+        Self::new(3, 22)
+    }
+}
+
 fn run(cmd: &mut Command, program: &str) {
     println!("running: {:?}", cmd);
     let status = match cmd.status() {
@@ -1000,4 +1052,23 @@ fn getenv_unwrap(v: &str) -> String {
 
 fn fail(s: &str) -> ! {
     panic!("\n{}\n\nbuild script failed, must exit now", s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Version;
+
+    #[test]
+    fn test_cmake_version() {
+        let text = "cmake version 3.22.2
+
+CMake suite maintained and supported by Kitware (kitware.com/cmake).
+";
+        let v = Version::parse(text).unwrap();
+        assert_eq!(v, Version::new(3, 22));
+        assert!(Version::new(3, 22) > Version::new(3, 21));
+        assert!(Version::new(3, 22) < Version::new(3, 23));
+
+        let _v = Version::from_command("cmake".as_ref()).unwrap();
+    }
 }
