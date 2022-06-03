@@ -830,6 +830,7 @@ impl Config {
         }
 
         // If the generated project is Makefile based we should carefully transfer corresponding CARGO_MAKEFLAGS
+        let mut use_jobserver = false;
         if fs::metadata(&build.join("Makefile")).is_ok() {
             match env::var_os("CARGO_MAKEFLAGS") {
                 // Only do this on non-windows and non-bsd
@@ -844,6 +845,7 @@ impl Config {
                         || cfg!(target_os = "bitrig")
                         || cfg!(target_os = "dragonflybsd")) =>
                 {
+                    use_jobserver = true;
                     cmd.env("MAKEFLAGS", makeflags);
                 }
                 _ => {}
@@ -864,7 +866,7 @@ impl Config {
 
         // --parallel requires CMake 3.12:
         // https://cmake.org/cmake/help/latest/release/3.12.html#command-line
-        if version >= Version::new(3, 12) {
+        if version >= Version::new(3, 12) && !use_jobserver {
             if let Ok(s) = env::var("NUM_JOBS") {
                 // See https://cmake.org/cmake/help/v3.12/manual/cmake.1.html#build-tool-mode
                 cmd.arg("--parallel").arg(s);
