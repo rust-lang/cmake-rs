@@ -40,3 +40,67 @@ jobs:
           git -c user.name='ci' -c user.email='ci' commit -m init
           git push -f -q https://git:${{ secrets.github_token }}@github.com/${{ github.repository }} HEAD:gh-pages
         if: github.event_name == 'push' && github.event.ref == 'refs/heads/master'
+
+  cross_compile_test:
+    name: Test Cross Compile - ${{ matrix.platform.target }}
+    needs: [ test ]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          # Testable
+          - target: aarch64-unknown-linux-gnu
+            test: true
+          - target: arm-unknown-linux-gnueabihf
+            test: true
+          - target: armv7-unknown-linux-gnueabihf
+            test: true
+          - target: mips-unknown-linux-gnu
+            test: true
+          - target: mips64-unknown-linux-gnuabi64
+            test: true
+          - target: mips64el-unknown-linux-gnuabi64
+            test: true
+          - target: mipsel-unknown-linux-gnu
+            test: true
+          - target: powerpc-unknown-linux-gnu
+            test: true
+          - target: powerpc64-unknown-linux-gnu
+            test: true
+          - target: powerpc64le-unknown-linux-gnu
+            test: true
+          - target: s390x-unknown-linux-gnu
+            test: true
+          - target: x86_64-unknown-linux-musl
+            test: true
+          - target: aarch64-unknown-linux-musl
+            test: true
+          - target: x86_64-pc-windows-gnu
+            test: true
+          # Build only
+          - target: x86_64-unknown-freebsd
+            test: false
+          - target: x86_64-unknown-netbsd
+            test: false
+          - target: x86_64-sun-solaris
+            test: false
+          - target: x86_64-unknown-illumos
+            test: false
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ matrix.platform.target }}
+    - uses: taiki-e/install-action@v1
+      with:
+        tool: cross
+    - name: cross test
+      run: cross test -vv --target ${{ matrix.platform.target }}
+      working-directory: test-crate
+      if: ${{ matrix.platform.test }}
+    - name: cross build
+      run: cross build -vv --target ${{ matrix.platform.target }}
+      working-directory: test-crate
+      if: ${{ !matrix.platform.test }}
