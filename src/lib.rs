@@ -448,10 +448,6 @@ impl Config {
                     if !self.defined("CMAKE_SYSTEM_NAME") {
                         self.define("CMAKE_SYSTEM_NAME", "Generic");
                     }
-                } else if target.contains("solaris") {
-                    if !self.defined("CMAKE_SYSTEM_NAME") {
-                        self.define("CMAKE_SYSTEM_NAME", "SunOS");
-                    }
                 } else if target != host && !self.defined("CMAKE_SYSTEM_NAME") {
                     // Set CMAKE_SYSTEM_NAME and CMAKE_SYSTEM_PROCESSOR when cross compiling
                     let os = getenv_unwrap("CARGO_CFG_TARGET_OS");
