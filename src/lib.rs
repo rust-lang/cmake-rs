@@ -495,7 +495,7 @@ impl Config {
             .unwrap_or_else(|| PathBuf::from(getenv_unwrap("OUT_DIR")));
         let build = dst.join("build");
         self.maybe_clear(&build);
-        let _ = fs::create_dir(&build);
+        let _ = fs::create_dir_all(&build);
 
         // Add all our dependencies to our cmake paths
         let mut cmake_prefix_path = Vec::new();
