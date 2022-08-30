@@ -628,6 +628,16 @@ impl Config {
                 cmd.arg("-DCMAKE_OSX_SYSROOT=/");
                 cmd.arg("-DCMAKE_OSX_DEPLOYMENT_TARGET=");
             }
+        } else if target.contains("darwin") {
+            if !self.defined("CMAKE_OSX_ARCHITECTURES") {
+                if target.contains("x86_64") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=x86_64");
+                } else if target.contains("aarch64") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=arm64");
+                } else {
+                    panic!("unsupported darwin target: {}", target);
+                }
+            }
         }
         if let Some(ref generator) = generator {
             cmd.arg("-G").arg(generator);
