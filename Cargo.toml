@@ -1,6 +1,6 @@
 [package]
 name = "cmake"
-version = "0.1.48"
+version = "0.1.49"
 authors = ["Alex Crichton <alex@alexcrichton.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
