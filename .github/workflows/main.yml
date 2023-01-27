@@ -83,3 +83,22 @@ jobs:
       run: cross build -vv --target ${{ matrix.platform.target }}
       working-directory: test-crate
       if: ${{ !matrix.platform.test }}
+
+  ios_cross_compile_test:
+    name: Test Cross Compile - ${{ matrix.platform.target }}
+    needs: [ test ]
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - target: aarch64-apple-ios
+    steps:
+    - uses: actions/checkout@master
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ matrix.platform.target }}
+    - name: build
+      run: cargo build -vv --target ${{ matrix.platform.target }}
+      working-directory: test-crate
