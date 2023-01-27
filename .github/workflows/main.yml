@@ -102,3 +102,6 @@ jobs:
     - name: build
       run: cargo build -vv --target ${{ matrix.platform.target }}
       working-directory: test-crate
+      env:
+        # If this isn't specified the default is iOS 7, for which zlib-ng will not compile due to the lack of thread-local storage.
+        IPHONEOS_DEPLOYMENT_TARGET: 16
