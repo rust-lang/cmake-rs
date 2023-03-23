@@ -94,7 +94,7 @@ jobs:
         platform:
           - target: aarch64-apple-ios
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v3
     - uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
