@@ -484,7 +484,7 @@ impl Config {
                         ("tvos", arch) => ("tvOS", arch),
                         ("watchos", arch) => ("watchOS", arch),
                         ("windows", "x86_64") => ("Windows", "AMD64"),
-                        ("windows", "i686") => ("Windows", "X86"),
+                        ("windows", "x86") => ("Windows", "X86"),
                         ("windows", "aarch64") => ("Windows", "ARM64"),
                         // Others
                         (os, arch) => (os, arch),
