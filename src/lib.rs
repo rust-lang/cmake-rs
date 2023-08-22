@@ -633,6 +633,7 @@ impl Config {
                     false
                 } else {
                     generator.as_ref().unwrap() == "NMake Makefiles"
+                        || generator.as_ref().unwrap() == "NMake Makefiles JOM"
                 }
             };
             if !is_ninja && !using_nmake_generator {
