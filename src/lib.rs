@@ -227,7 +227,7 @@ impl Config {
     }
 
     /// Sets the toolset name (-T) if supported by generator.
-    /// Can be used to compile with CLang/LLV instead of msvc when Visual Studio generator is selected.
+    /// Can be used to compile with Clang/LLVM instead of msvc when Visual Studio generator is selected.
     ///
     /// If unset, will use the default toolset of the selected generator.
     pub fn generator_toolset<T: AsRef<OsStr>>(&mut self, toolset_name: T) -> &mut Config {
