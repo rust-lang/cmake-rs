@@ -762,7 +762,10 @@ impl Config {
                 // Also specify this on Windows only if we use MSVC with Ninja,
                 // as it's not needed for MSVC with Visual Studio generators and
                 // for MinGW it doesn't really vary.
-                if !self.defined("CMAKE_TOOLCHAIN_FILE")
+                let skip_compiler_flag =
+                    env::var("CMAKE_RS_SKIP_COMPILER_FLAG").ok() == Some("1".to_string());
+                if !skip_compiler_flag
+                    && !self.defined("CMAKE_TOOLCHAIN_FILE")
                     && !self.defined(&tool_var)
                     && (env::consts::FAMILY != "windows" || (msvc && is_ninja))
                 {
