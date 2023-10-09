@@ -509,8 +509,13 @@ impl Config {
             .opt_level(0)
             .debug(false)
             .warnings(false)
-            .host(&host)
-            .no_default_flags(ndk);
+            .host(&host);
+
+        // Maintain backwards compatibility by setting `no_default_flag`
+        if ndk {
+            c_cfg.no_default_flags(true);
+        }
+
         if !ndk {
             c_cfg.target(&target);
         }
@@ -521,8 +526,13 @@ impl Config {
             .opt_level(0)
             .debug(false)
             .warnings(false)
-            .host(&host)
-            .no_default_flags(ndk);
+            .host(&host);
+
+        // Maintain backwards compatibility by setting `no_default_flag`
+        if ndk {
+            cxx_cfg.no_default_flags(true);
+        }
+
         if !ndk {
             cxx_cfg.target(&target);
         }
