@@ -1062,7 +1062,7 @@ impl Default for Version {
 }
 
 fn run(cmd: &mut Command, program: &str) {
-    println!("running: {:?}", cmd);
+    eprintln!("running: {:?}", cmd);
     let status = match cmd.status() {
         Ok(status) => status,
         Err(ref e) if e.kind() == ErrorKind::NotFound => {
