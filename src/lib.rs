@@ -438,6 +438,13 @@ impl Config {
         };
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
 
+        let generator = self
+            .generator
+            .clone()
+            .or_else(|| self.getenv_target_os("CMAKE_GENERATOR"));
+
+        let msvc = target.contains("msvc");
+
         // Some decisions later on are made if CMAKE_TOOLCHAIN_FILE is defined,
         // so we need to read it from the environment variables from the beginning.
         if !self.defined("CMAKE_TOOLCHAIN_FILE") {
@@ -448,7 +455,14 @@ impl Config {
                     if !self.defined("CMAKE_SYSTEM_NAME") {
                         self.define("CMAKE_SYSTEM_NAME", "Generic");
                     }
-                } else if target != host && !self.defined("CMAKE_SYSTEM_NAME") {
+                } else if target != host
+                    && !self.defined("CMAKE_SYSTEM_NAME")
+                    && !(msvc
+                        && self
+                            .generator
+                            .as_deref()
+                            .map_or(true, |g| g.to_string_lossy().starts_with("Visual Studio")))
+                {
                     // Set CMAKE_SYSTEM_NAME and CMAKE_SYSTEM_PROCESSOR when cross compiling
                     let os = getenv_unwrap("CARGO_CFG_TARGET_OS");
                     let arch = getenv_unwrap("CARGO_CFG_TARGET_ARCH");
@@ -495,12 +509,6 @@ impl Config {
             }
         }
 
-        let generator = self
-            .generator
-            .clone()
-            .or_else(|| self.getenv_target_os("CMAKE_GENERATOR"));
-
-        let msvc = target.contains("msvc");
         let ndk = self.uses_android_ndk();
         let mut c_cfg = self.c_cfg.clone().unwrap_or_default();
         c_cfg

@@ -105,3 +105,22 @@ jobs:
       env:
         # If this isn't specified the default is iOS 7, for which zlib-ng will not compile due to the lack of thread-local storage.
         IPHONEOS_DEPLOYMENT_TARGET: 16
+
+  win_cross_compile_test:
+    name: Test Cross Compile - ${{ matrix.platform.target }}
+    needs: [ test ]
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - target: aarch64-pc-windows-msvc
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: ${{ matrix.platform.target }}
+    - name: build
+      run: cargo build -vv --target ${{ matrix.platform.target }}
+      working-directory: test-crate
