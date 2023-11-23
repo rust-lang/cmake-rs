@@ -1074,6 +1074,12 @@ fn run(cmd: &mut Command, program: &str) {
         Err(e) => fail(&format!("failed to execute command: {}", e)),
     };
     if !status.success() {
+        if status.code() == Some(127) {
+            fail(&format!(
+                "command did not execute successfully, got: {}, is `{}` not installed?",
+                status, program
+            ));
+        }
         fail(&format!(
             "command did not execute successfully, got: {}",
             status
