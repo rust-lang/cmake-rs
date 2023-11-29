@@ -661,7 +661,7 @@ impl Config {
                     panic!("unsupported msvc target: {}", target);
                 }
             }
-        } else if target.contains("darwin") {
+        } else if target.contains("darwin") || target.contains("ios") {
             if !self.defined("CMAKE_OSX_ARCHITECTURES") {
                 if target.contains("x86_64") {
                     cmd.arg("-DCMAKE_OSX_ARCHITECTURES=x86_64");
@@ -670,6 +670,14 @@ impl Config {
                 } else {
                     panic!("unsupported darwin target: {}", target);
                 }
+            }
+
+            if !self.defined("CMAKE_OSX_SYSROOT") && target.contains("ios") {
+                if target.contains("x86_64") || target.contains("sim") {
+                    cmd.arg("-DCMAKE_OSX_SYSROOT=iphonesimulator");
+                } else {
+                    cmd.arg("-DCMAKE_OSX_SYSROOT=iphoneos");
+                };
             }
         }
         if let Some(ref generator) = generator {
