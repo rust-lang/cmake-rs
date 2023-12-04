@@ -76,7 +76,6 @@ pub struct Config {
     static_crt: Option<bool>,
     uses_cxx11: bool,
     always_configure: bool,
-    no_build_target: bool,
     verbose_cmake: bool,
     verbose_make: bool,
     pic: Option<bool>,
@@ -200,7 +199,6 @@ impl Config {
             static_crt: None,
             uses_cxx11: false,
             always_configure: true,
-            no_build_target: false,
             verbose_cmake: false,
             verbose_make: false,
             pic: None,
@@ -286,14 +284,6 @@ impl Config {
     /// build scripts so it's not necessary to call this from a build script.
     pub fn target(&mut self, target: &str) -> &mut Config {
         self.target = Some(target.to_string());
-        self
-    }
-
-    /// Disables the cmake target option for this compilation.
-    ///
-    /// Note that this isn't related to the target triple passed to the compiler!
-    pub fn no_build_target(&mut self, no_build_target: bool) -> &mut Config {
-        self.no_build_target = no_build_target;
         self
     }
 
@@ -570,7 +560,14 @@ impl Config {
             cmd.arg("--debug-output");
         }
 
-        cmd.arg(&self.path).current_dir(&build);
+        // not use the current dir, should use -B and -S
+        // In some cases, every time the project build.rs 
+        // is changed, cmake is reloaded without reading 
+        // the CMakeCache.txt
+        cmd.current_dir(&build);
+        cmd.arg("-S").arg(&self.path);
+        cmd.arg("-B").arg(&build);
+
         let mut is_ninja = false;
         if let Some(ref generator) = generator {
             is_ninja = generator.to_string_lossy().contains("Ninja");
@@ -847,13 +844,11 @@ impl Config {
             }
         }
 
-        cmd.arg("--build").arg(".");
+        // use the absolute path, not use relective path
+        cmd.arg("--build").arg(&build);
 
-        if !self.no_build_target {
-            let target = self
-                .cmake_target
-                .clone()
-                .unwrap_or_else(|| "install".to_string());
+        // some projects may not have install targets
+        if let Some(target) = self.cmake_target.clone() {
             cmd.arg("--target").arg(target);
         }
 
@@ -872,6 +867,13 @@ impl Config {
             cmd.arg("--").args(&self.build_args);
         }
 
+        run(&mut cmd, "cmake");
+
+        // run this install command
+        // projects that do not have an install
+        // target will work just fine
+        let mut cmd = self.cmake_build_command(&target);
+        cmd.arg("--install").arg(&build);
         run(&mut cmd, "cmake");
 
         println!("cargo:root={}", dst.display());
