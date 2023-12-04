@@ -561,8 +561,8 @@ impl Config {
         }
 
         // not use the current dir, should use -B and -S
-        // In some cases, every time the project build.rs 
-        // is changed, cmake is reloaded without reading 
+        // In some cases, every time the project build.rs
+        // is changed, cmake is reloaded without reading
         // the CMakeCache.txt
         cmd.current_dir(&build);
         cmd.arg("-S").arg(&self.path);
@@ -694,8 +694,8 @@ impl Config {
             .defines
             .iter()
             .find(|&&(ref a, _)| a == "CMAKE_BUILD_TYPE")
-            .map(|x| x.1.to_str().unwrap())
-            .unwrap_or(&profile);
+            .map(|x| String::from(x.1.to_str().unwrap()))
+            .unwrap_or(profile.clone());
         let build_type_upcase = build_type
             .chars()
             .flat_map(|c| c.to_uppercase())
@@ -852,7 +852,7 @@ impl Config {
             cmd.arg("--target").arg(target);
         }
 
-        cmd.arg("--config").arg(&profile);
+        cmd.arg("--config").arg(&build_type);
 
         // --parallel requires CMake 3.12:
         // https://cmake.org/cmake/help/latest/release/3.12.html#command-line
@@ -874,6 +874,8 @@ impl Config {
         // target will work just fine
         let mut cmd = self.cmake_build_command(&target);
         cmd.arg("--install").arg(&build);
+        cmd.arg("--config").arg(&build_type);
+
         run(&mut cmd, "cmake");
 
         println!("cargo:root={}", dst.display());
