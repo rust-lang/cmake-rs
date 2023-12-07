@@ -847,7 +847,7 @@ impl Config {
             }
         }
 
-        cmd.arg("--build").arg(".");
+        cmd.arg("--build").arg(&build);
 
         if !self.no_build_target {
             let target = self
