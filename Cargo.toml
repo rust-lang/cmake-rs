@@ -15,4 +15,7 @@ categories = ["development-tools::build-utils"]
 edition = "2021"
 
 [dependencies]
-cc = "1.0.90"
+cc = { version = "1.0.90" }
+
+[features]
+parallel = ["cc/parallel"]
