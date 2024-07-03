@@ -838,7 +838,7 @@ impl Config {
                         || cfg!(target_os = "netbsd")
                         || cfg!(target_os = "freebsd")
                         || cfg!(target_os = "bitrig")
-                        || cfg!(target_os = "dragonflybsd")) =>
+                        || cfg!(target_os = "dragonfly")) =>
                 {
                     use_jobserver = true;
                     cmd.env("MAKEFLAGS", makeflags);
