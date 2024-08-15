@@ -57,8 +57,9 @@ jobs:
             test: false
           - target: x86_64-pc-windows-gnu
             test: false
-          - target: x86_64-unknown-freebsd
-            test: false
+          # FIXME: build fails, see <https://github.com/rust-lang/cmake-rs/issues/211>
+          # - target: x86_64-unknown-freebsd
+          #   test: false
           - target: x86_64-unknown-netbsd
             test: false
           - target: x86_64-unknown-illumos
