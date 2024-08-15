@@ -1,6 +1,10 @@
 name: CI
 on: [push, pull_request]
 
+env:
+  RUSTDOCFLAGS: -D warnings
+  RUSTFLAGS: -D warnings
+
 jobs:
   test:
     name: Test
@@ -8,28 +12,17 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [stable, beta, nightly]
+        rust: ["1.70", stable, beta, nightly]
     steps:
-    - uses: actions/checkout@master
+    - uses: actions/checkout@v4
     - name: Install Rust
       run: |
         rustup update ${{ matrix.rust }} --no-self-update
         rustup default ${{ matrix.rust }}
+    - uses: Swatinem/rust-cache@v2
     - run: cargo test
     - name: Integration test
       run: cargo test --manifest-path test-crate/Cargo.toml
-
-  rustfmt:
-    name: Rustfmt
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@master
-    - name: Install Rust
-      run: |
-        rustup update stable --no-self-update
-        rustup default stable
-        rustup component add rustfmt
-    - run: cargo fmt -- --check
 
   cross_compile_test:
     name: Test Cross Compile - ${{ matrix.platform.target }}
@@ -71,10 +64,10 @@ jobs:
         rustup update stable --no-self-update
         rustup default stable
         rustup target add ${{ matrix.platform.target }}
-    - run: cargo fmt -- --check
     - uses: taiki-e/install-action@v2
       with:
         tool: cross
+    - uses: Swatinem/rust-cache@v2
     - name: cross test
       run: cross test -vv --target ${{ matrix.platform.target }}
       working-directory: test-crate
@@ -94,14 +87,40 @@ jobs:
         platform:
           - target: aarch64-apple-ios
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        target: ${{ matrix.platform.target }}
+    - uses: actions/checkout@v4
+    - name: Install Rust
+      run: |
+        rustup update stable --no-self-update
+        rustup default stable
+        rustup target add ${{ matrix.platform.target }}
+    - uses: Swatinem/rust-cache@v2
     - name: build
       run: cargo build -vv --target ${{ matrix.platform.target }}
       working-directory: test-crate
       env:
         # If this isn't specified the default is iOS 7, for which zlib-ng will not compile due to the lack of thread-local storage.
         IPHONEOS_DEPLOYMENT_TARGET: 16
+
+  rustfmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Rust
+      run: |
+        rustup update stable --no-self-update
+        rustup default stable
+        rustup component add rustfmt
+    - run: cargo fmt --all -- --check
+
+  doc:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          rustup update nightly --no-self-update
+          rustup default nightly 
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc
+
