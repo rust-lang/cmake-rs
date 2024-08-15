@@ -946,6 +946,8 @@ impl Config {
             Ok(VsVers::Vs16) => "Visual Studio 16 2019",
             Ok(VsVers::Vs15) => "Visual Studio 15 2017",
             Ok(VsVers::Vs14) => "Visual Studio 14 2015",
+            // This was deprecated recently (2024-07). Ignore the warning for now.
+            #[allow(deprecated)]
             Ok(VsVers::Vs12) => "Visual Studio 12 2013",
             Ok(_) => panic!(
                 "Visual studio version detected but this crate \
