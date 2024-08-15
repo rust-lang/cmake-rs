@@ -491,6 +491,7 @@ impl Config {
                     ("windows", "x86_64") => ("Windows", "AMD64"),
                     ("windows", "x86") => ("Windows", "X86"),
                     ("windows", "aarch64") => ("Windows", "ARM64"),
+                    ("none", arch) => ("Generic", arch),
                     // Others
                     (os, arch) => (os, arch),
                 };
