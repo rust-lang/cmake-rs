@@ -12,7 +12,9 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - name: Install Rust
-      run: rustup update ${{ matrix.rust }} && rustup default ${{ matrix.rust }}
+      run: |
+        rustup update ${{ matrix.rust }} --no-self-update
+        rustup default ${{ matrix.rust }}
     - run: cargo test
     - name: Integration test
       run: cargo test --manifest-path test-crate/Cargo.toml
@@ -23,7 +25,10 @@ jobs:
     steps:
     - uses: actions/checkout@master
     - name: Install Rust
-      run: rustup update stable && rustup default stable && rustup component add rustfmt
+      run: |
+        rustup update stable --no-self-update
+        rustup default stable
+        rustup component add rustfmt
     - run: cargo fmt -- --check
 
   cross_compile_test:
@@ -60,11 +65,13 @@ jobs:
             test: false
     steps:
     - uses: actions/checkout@master
-    - uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        target: ${{ matrix.platform.target }}
-    - uses: taiki-e/install-action@v1
+    - name: Install Rust
+      run: |
+        rustup update stable --no-self-update
+        rustup default stable
+        rustup target add ${{ matrix.platform.target }}
+    - run: cargo fmt -- --check
+    - uses: taiki-e/install-action@v2
       with:
         tool: cross
     - name: cross test
