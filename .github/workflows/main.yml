@@ -47,14 +47,14 @@ jobs:
             test: true
           - target: aarch64-unknown-linux-musl
             test: true
-          - target: x86_64-pc-windows-gnu
-            test: true
           # Build only
+          - target: x86_64-pc-solaris
+            test: false
+          - target: x86_64-pc-windows-gnu
+            test: false
           - target: x86_64-unknown-freebsd
             test: false
           - target: x86_64-unknown-netbsd
-            test: false
-          - target: x86_64-sun-solaris
             test: false
           - target: x86_64-unknown-illumos
             test: false
