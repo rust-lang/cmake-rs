@@ -443,59 +443,57 @@ impl Config {
         if !self.defined("CMAKE_TOOLCHAIN_FILE") {
             if let Some(s) = self.getenv_target_os("CMAKE_TOOLCHAIN_FILE") {
                 self.define("CMAKE_TOOLCHAIN_FILE", s);
-            } else {
-                if target.contains("redox") {
-                    if !self.defined("CMAKE_SYSTEM_NAME") {
-                        self.define("CMAKE_SYSTEM_NAME", "Generic");
-                    }
-                } else if target != host && !self.defined("CMAKE_SYSTEM_NAME") {
-                    // Set CMAKE_SYSTEM_NAME and CMAKE_SYSTEM_PROCESSOR when cross compiling
-                    let os = getenv_unwrap("CARGO_CFG_TARGET_OS");
-                    let arch = getenv_unwrap("CARGO_CFG_TARGET_ARCH");
-                    // CMAKE_SYSTEM_NAME list
-                    // https://gitlab.kitware.com/cmake/cmake/-/issues/21489#note_1077167
-                    //
-                    // CMAKE_SYSTEM_PROCESSOR
-                    // some of the values come from https://en.wikipedia.org/wiki/Uname
-                    let (system_name, system_processor) = match (os.as_str(), arch.as_str()) {
-                        ("android", arch) => ("Android", arch),
-                        ("dragonfly", arch) => ("DragonFly", arch),
-                        ("macos", "aarch64") => ("Darwin", "arm64"),
-                        ("macos", arch) => ("Darwin", arch),
-                        ("freebsd", "x86_64") => ("FreeBSD", "amd64"),
-                        ("freebsd", arch) => ("FreeBSD", arch),
-                        ("fuchsia", arch) => ("Fuchsia", arch),
-                        ("haiku", arch) => ("Haiku", arch),
-                        ("ios", "aarch64") => ("iOS", "arm64"),
-                        ("ios", arch) => ("iOS", arch),
-                        ("linux", arch) => {
-                            let name = "Linux";
-                            match arch {
-                                "powerpc" => (name, "ppc"),
-                                "powerpc64" => (name, "ppc64"),
-                                "powerpc64le" => (name, "ppc64le"),
-                                _ => (name, arch),
-                            }
-                        }
-                        ("netbsd", arch) => ("NetBSD", arch),
-                        ("openbsd", "x86_64") => ("OpenBSD", "amd64"),
-                        ("openbsd", arch) => ("OpenBSD", arch),
-                        ("solaris", arch) => ("SunOS", arch),
-                        ("tvos", "aarch64") => ("tvOS", "arm64"),
-                        ("tvos", arch) => ("tvOS", arch),
-                        ("visionos", "aarch64") => ("visionOS", "arm64"),
-                        ("visionos", arch) => ("visionOS", arch),
-                        ("watchos", "aarch64") => ("watchOS", "arm64"),
-                        ("watchos", arch) => ("watchOS", arch),
-                        ("windows", "x86_64") => ("Windows", "AMD64"),
-                        ("windows", "x86") => ("Windows", "X86"),
-                        ("windows", "aarch64") => ("Windows", "ARM64"),
-                        // Others
-                        (os, arch) => (os, arch),
-                    };
-                    self.define("CMAKE_SYSTEM_NAME", system_name);
-                    self.define("CMAKE_SYSTEM_PROCESSOR", system_processor);
+            } else if target.contains("redox") {
+                if !self.defined("CMAKE_SYSTEM_NAME") {
+                    self.define("CMAKE_SYSTEM_NAME", "Generic");
                 }
+            } else if target != host && !self.defined("CMAKE_SYSTEM_NAME") {
+                // Set CMAKE_SYSTEM_NAME and CMAKE_SYSTEM_PROCESSOR when cross compiling
+                let os = getenv_unwrap("CARGO_CFG_TARGET_OS");
+                let arch = getenv_unwrap("CARGO_CFG_TARGET_ARCH");
+                // CMAKE_SYSTEM_NAME list
+                // https://gitlab.kitware.com/cmake/cmake/-/issues/21489#note_1077167
+                //
+                // CMAKE_SYSTEM_PROCESSOR
+                // some of the values come from https://en.wikipedia.org/wiki/Uname
+                let (system_name, system_processor) = match (os.as_str(), arch.as_str()) {
+                    ("android", arch) => ("Android", arch),
+                    ("dragonfly", arch) => ("DragonFly", arch),
+                    ("macos", "aarch64") => ("Darwin", "arm64"),
+                    ("macos", arch) => ("Darwin", arch),
+                    ("freebsd", "x86_64") => ("FreeBSD", "amd64"),
+                    ("freebsd", arch) => ("FreeBSD", arch),
+                    ("fuchsia", arch) => ("Fuchsia", arch),
+                    ("haiku", arch) => ("Haiku", arch),
+                    ("ios", "aarch64") => ("iOS", "arm64"),
+                    ("ios", arch) => ("iOS", arch),
+                    ("linux", arch) => {
+                        let name = "Linux";
+                        match arch {
+                            "powerpc" => (name, "ppc"),
+                            "powerpc64" => (name, "ppc64"),
+                            "powerpc64le" => (name, "ppc64le"),
+                            _ => (name, arch),
+                        }
+                    }
+                    ("netbsd", arch) => ("NetBSD", arch),
+                    ("openbsd", "x86_64") => ("OpenBSD", "amd64"),
+                    ("openbsd", arch) => ("OpenBSD", arch),
+                    ("solaris", arch) => ("SunOS", arch),
+                    ("tvos", "aarch64") => ("tvOS", "arm64"),
+                    ("tvos", arch) => ("tvOS", arch),
+                    ("visionos", "aarch64") => ("visionOS", "arm64"),
+                    ("visionos", arch) => ("visionOS", arch),
+                    ("watchos", "aarch64") => ("watchOS", "arm64"),
+                    ("watchos", arch) => ("watchOS", arch),
+                    ("windows", "x86_64") => ("Windows", "AMD64"),
+                    ("windows", "x86") => ("Windows", "X86"),
+                    ("windows", "aarch64") => ("Windows", "ARM64"),
+                    // Others
+                    (os, arch) => (os, arch),
+                };
+                self.define("CMAKE_SYSTEM_NAME", system_name);
+                self.define("CMAKE_SYSTEM_PROCESSOR", system_processor);
             }
         }
 
@@ -554,7 +552,7 @@ impl Config {
         let mut cmake_prefix_path = Vec::new();
         for dep in &self.deps {
             let dep = dep.to_uppercase().replace('-', "_");
-            if let Some(root) = env::var_os(&format!("DEP_{}_ROOT", dep)) {
+            if let Some(root) = env::var_os(format!("DEP_{}_ROOT", dep)) {
                 cmake_prefix_path.push(PathBuf::from(root));
             }
         }
@@ -631,14 +629,11 @@ impl Config {
             // If we're on MSVC we need to be sure to use the right generator or
             // otherwise we won't get 32/64 bit correct automatically.
             // This also guarantees that NMake generator isn't chosen implicitly.
-            let using_nmake_generator = {
-                if generator.is_none() {
-                    cmd.arg("-G").arg(self.visual_studio_generator(&target));
-                    false
-                } else {
-                    generator.as_ref().unwrap() == "NMake Makefiles"
-                        || generator.as_ref().unwrap() == "NMake Makefiles JOM"
-                }
+            let using_nmake_generator = if let Some(g) = &generator {
+                g == "NMake Makefiles" || g == "NMake Makefiles JOM"
+            } else {
+                cmd.arg("-G").arg(self.visual_studio_generator(&target));
+                false
             };
             if !is_ninja && !using_nmake_generator {
                 if target.contains("x86_64") {
@@ -665,15 +660,13 @@ impl Config {
                     panic!("unsupported msvc target: {}", target);
                 }
             }
-        } else if target.contains("darwin") {
-            if !self.defined("CMAKE_OSX_ARCHITECTURES") {
-                if target.contains("x86_64") {
-                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=x86_64");
-                } else if target.contains("aarch64") {
-                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=arm64");
-                } else {
-                    panic!("unsupported darwin target: {}", target);
-                }
+        } else if target.contains("darwin") && !self.defined("CMAKE_OSX_ARCHITECTURES") {
+            if target.contains("x86_64") {
+                cmd.arg("-DCMAKE_OSX_ARCHITECTURES=x86_64");
+            } else if target.contains("aarch64") {
+                cmd.arg("-DCMAKE_OSX_ARCHITECTURES=arm64");
+            } else {
+                panic!("unsupported darwin target: {}", target);
             }
         }
         if let Some(ref generator) = generator {
@@ -683,7 +676,7 @@ impl Config {
             cmd.arg("-T").arg(generator_toolset);
         }
         let profile = self.get_profile().to_string();
-        for &(ref k, ref v) in &self.defines {
+        for (k, v) in &self.defines {
             let mut os = OsString::from("-D");
             os.push(k);
             os.push("=");
@@ -700,7 +693,7 @@ impl Config {
         let build_type = self
             .defines
             .iter()
-            .find(|&&(ref a, _)| a == "CMAKE_BUILD_TYPE")
+            .find(|&(a, _)| a == "CMAKE_BUILD_TYPE")
             .map(|x| x.1.to_str().unwrap())
             .unwrap_or(&profile);
         let build_type_upcase = build_type
@@ -802,14 +795,14 @@ impl Config {
         }
 
         if !self.defined("CMAKE_BUILD_TYPE") {
-            cmd.arg(&format!("-DCMAKE_BUILD_TYPE={}", profile));
+            cmd.arg(format!("-DCMAKE_BUILD_TYPE={}", profile));
         }
 
         if self.verbose_make {
             cmd.arg("-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON");
         }
 
-        for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
+        for (k, v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
         }
 
@@ -824,13 +817,13 @@ impl Config {
         let mut cmd = self.cmake_build_command(&target);
         cmd.current_dir(&build);
 
-        for &(ref k, ref v) in c_compiler.env().iter().chain(&self.env) {
+        for (k, v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
         }
 
         // If the generated project is Makefile based we should carefully transfer corresponding CARGO_MAKEFLAGS
         let mut use_jobserver = false;
-        if fs::metadata(&build.join("Makefile")).is_ok() {
+        if fs::metadata(build.join("Makefile")).is_ok() {
             match env::var_os("CARGO_MAKEFLAGS") {
                 // Only do this on non-windows and non-bsd
                 // On Windows, we could be invoking make instead of
@@ -841,8 +834,7 @@ impl Config {
                         || cfg!(target_os = "openbsd")
                         || cfg!(target_os = "netbsd")
                         || cfg!(target_os = "freebsd")
-                        || cfg!(target_os = "bitrig")
-                        || cfg!(target_os = "dragonflybsd")) =>
+                        || cfg!(target_os = "dragonfly")) =>
                 {
                     use_jobserver = true;
                     cmd.env("MAKEFLAGS", makeflags);
@@ -951,6 +943,8 @@ impl Config {
             Ok(VsVers::Vs16) => "Visual Studio 16 2019",
             Ok(VsVers::Vs15) => "Visual Studio 15 2017",
             Ok(VsVers::Vs14) => "Visual Studio 14 2015",
+            // This was deprecated recently (2024-07). Ignore the warning for now.
+            #[allow(deprecated)]
             Ok(VsVers::Vs12) => "Visual Studio 12 2013",
             Ok(_) => panic!(
                 "Visual studio version detected but this crate \
@@ -970,7 +964,7 @@ impl Config {
     }
 
     fn defined(&self, var: &str) -> bool {
-        self.defines.iter().any(|&(ref a, _)| a == var)
+        self.defines.iter().any(|(a, _)| a == var)
     }
 
     // If a cmake project has previously been built (e.g. CMakeCache.txt already
