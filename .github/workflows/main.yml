@@ -39,14 +39,6 @@ jobs:
             test: true
           - target: arm-unknown-linux-gnueabihf
             test: true
-          - target: mips-unknown-linux-gnu
-            test: true
-          - target: mips64-unknown-linux-gnuabi64
-            test: true
-          - target: mips64el-unknown-linux-gnuabi64
-            test: true
-          - target: mipsel-unknown-linux-gnu
-            test: true
           - target: powerpc-unknown-linux-gnu
             test: true
           - target: s390x-unknown-linux-gnu
