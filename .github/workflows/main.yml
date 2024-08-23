@@ -137,3 +137,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc
 
+  success:
+    needs:
+      - clippy
+      - test
+      - cross_compile_test
+      - ios_cross_compile_test
+      - rustfmt
+      - doc
+    runs-on: ubuntu-latest
+    # GitHub branch protection is exceedingly silly and treats "jobs skipped because a dependency
+    # failed" as success. So we have to do some contortions to ensure the job fails if any of its
+    # dependencies fails.
+    if: always() # make sure this is never "skipped"
+    steps:
+      # Manually check the status of all dependencies. `if: failure()` does not work.
+      - name: check if any dependency failed
+        run: jq --exit-status 'all(.result == "success")' <<< '${{ toJson(needs) }}'
