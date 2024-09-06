@@ -81,7 +81,9 @@ pub struct Config {
     verbose_make: bool,
     pic: Option<bool>,
     c_cfg: Option<cc::Build>,
+    no_default_c_flags: bool,
     cxx_cfg: Option<cc::Build>,
+    no_default_cxx_flags: bool,
     env_cache: HashMap<String, Option<OsString>>,
 }
 
@@ -205,7 +207,9 @@ impl Config {
             verbose_make: false,
             pic: None,
             c_cfg: None,
+            no_default_c_flags: false,
             cxx_cfg: None,
+            no_default_cxx_flags: false,
             env_cache: HashMap::new(),
         }
     }
@@ -420,6 +424,18 @@ impl Config {
         self
     }
 
+    /// Disables the generation of default compiler cxx flags. The default compiler flags may cause conflicts in some cross compiling scenarios.
+    pub fn no_default_c_flags(&mut self, no_default_c_flags: bool) -> &mut Config {
+        self.no_default_c_flags = no_default_c_flags;
+        self
+    }
+
+    /// Disables the generation of default compiler c flags. The default compiler flags may cause conflicts in some cross compiling scenarios.
+    pub fn no_default_cxx_flags(&mut self, no_default_cxx_flags: bool) -> &mut Config {
+        self.no_default_cxx_flags = no_default_cxx_flags;
+        self
+    }
+
     /// Run this configuration, compiling the library with all the configured
     /// options.
     ///
@@ -515,7 +531,7 @@ impl Config {
             .debug(false)
             .warnings(false)
             .host(&host)
-            .no_default_flags(ndk);
+            .no_default_flags(ndk | self.no_default_c_flags);
         if !ndk {
             c_cfg.target(&target);
         }
@@ -527,7 +543,7 @@ impl Config {
             .debug(false)
             .warnings(false)
             .host(&host)
-            .no_default_flags(ndk);
+            .no_default_flags(ndk | self.no_default_cxx_flags);
         if !ndk {
             cxx_cfg.target(&target);
         }
@@ -791,9 +807,12 @@ impl Config {
                     cmd.arg(ccompiler);
                 }
             };
-
-            set_compiler("C", &c_compiler, &self.cflags);
-            set_compiler("CXX", &cxx_compiler, &self.cxxflags);
+            if !self.no_default_c_flags {
+                set_compiler("C", &c_compiler, &self.cflags);
+            }
+            if !self.no_default_cxx_flags {
+                set_compiler("CXX", &cxx_compiler, &self.cxxflags);
+            }
             set_compiler("ASM", &asm_compiler, &self.asmflags);
         }
 
