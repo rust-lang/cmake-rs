@@ -1,6 +1,6 @@
 [package]
 name = "cmake"
-version = "0.1.50"
+version = "0.1.51"
 authors = ["Alex Crichton <alex@alexcrichton.com>"]
 license = "MIT OR Apache-2.0"
 readme = "README.md"
@@ -15,4 +15,4 @@ categories = ["development-tools::build-utils"]
 edition = "2021"
 
 [dependencies]
-cc = "1.0.72"
+cc = "1.0.83"
