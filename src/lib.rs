@@ -447,6 +447,33 @@ impl Config {
                 if !self.defined("CMAKE_SYSTEM_NAME") {
                     self.define("CMAKE_SYSTEM_NAME", "Generic");
                 }
+            } else if target.contains("emscripten") {
+                const TOOLCHAIN_SUBPATH: &str = "cmake/Modules/Platform/Emscripten.cmake";
+                let emscripten_root = if let Ok(emsdk) = env::var("EMSDK") {
+                    PathBuf::from(emsdk).join("upstream/emscripten")
+                } else if let Ok(emscripten) = env::var("EMSCRIPTEN_ROOT") {
+                    // Users can define EMSCRIPTEN_ROOT as with godot engine
+                    PathBuf::from(emscripten)
+                } else {
+                    // Assume emscripten is globally installed. In that case we need to invoke em-config
+                    let em_config = if host.contains("windows") {
+                        "em-config.bat"
+                    } else {
+                        "em-config"
+                    };
+                    let output = Command::new(em_config)
+                        .arg("EMSCRIPTEN_ROOT")
+                        .output()
+                        .expect("Failed to find emscripten toolchain!")
+                        .stdout;
+                    PathBuf::from(std::str::from_utf8(&output).unwrap().trim())
+                };
+                if emscripten_root.exists() {
+                    self.define(
+                        "CMAKE_TOOLCHAIN_FILE",
+                        emscripten_root.join(TOOLCHAIN_SUBPATH),
+                    );
+                }
             } else if target != host && !self.defined("CMAKE_SYSTEM_NAME") {
                 // Set CMAKE_SYSTEM_NAME and CMAKE_SYSTEM_PROCESSOR when cross compiling
                 let os = getenv_unwrap("CARGO_CFG_TARGET_OS");
@@ -566,7 +593,7 @@ impl Config {
         let cmake_prefix_path = env::join_paths(&cmake_prefix_path).unwrap();
 
         // Build up the first cmake command to build the build system.
-        let mut cmd = self.cmake_configure_command(&target);
+        let mut cmd = Command::new(self.cmake_executable());
 
         let version = Version::from_command(cmd.get_program()).unwrap_or_default();
 
@@ -671,6 +698,26 @@ impl Config {
             } else {
                 panic!("unsupported darwin target: {}", target);
             }
+        } else if target.contains("emscripten") && host.contains("windows") {
+            let has_ninja = Command::new("ninja")
+                .arg("--version")
+                .output()
+                .err()
+                .map(|e| e.kind() != ErrorKind::NotFound)
+                .unwrap_or(true);
+            let has_mingw32 = Command::new("mingw32-make")
+                .arg("--version")
+                .output()
+                .err()
+                .map(|e| e.kind() != ErrorKind::NotFound)
+                .unwrap_or(true);
+            let generator = match (has_ninja, has_mingw32) {
+                            (true, _) => "Ninja",
+                            (false, true) => "MinGW Makefiles",
+                            (false, false) => fail("no valid generator found for emscripten toolchain; Ninja or MinGW must be installed")
+                        };
+
+            cmd.arg("-G").arg(generator);
         }
         if let Some(ref generator) = generator {
             cmd.arg("-G").arg(generator);
@@ -710,36 +757,13 @@ impl Config {
                 Some(s) => s.starts_with("-O") || s.starts_with("/O") || s == "-g",
                 None => false,
             };
-            let mut set_compiler = |kind: &str, compiler: &cc::Tool, extra: &OsString| {
-                let flag_var = format!("CMAKE_{}_FLAGS", kind);
-                let tool_var = format!("CMAKE_{}_COMPILER", kind);
-                if !self.defined(&flag_var) {
-                    let mut flagsflag = OsString::from("-D");
-                    flagsflag.push(&flag_var);
-                    flagsflag.push("=");
-                    flagsflag.push(extra);
-                    for arg in compiler.args() {
-                        if skip_arg(arg) {
-                            continue;
-                        }
-                        flagsflag.push(" ");
-                        flagsflag.push(arg);
-                    }
-                    cmd.arg(flagsflag);
-                }
-
-                // The visual studio generator apparently doesn't respect
-                // `CMAKE_C_FLAGS` but does respect `CMAKE_C_FLAGS_RELEASE` and
-                // such. We need to communicate /MD vs /MT, so set those vars
-                // here.
-                //
-                // Note that for other generators, though, this *overrides*
-                // things like the optimization flags, which is bad.
-                if generator.is_none() && msvc {
-                    let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind, build_type_upcase);
-                    if !self.defined(&flag_var_alt) {
+            if !(target.contains("emscripten") && host.contains("windows")) {
+                let mut set_compiler = |kind: &str, compiler: &cc::Tool, extra: &OsString| {
+                    let flag_var = format!("CMAKE_{}_FLAGS", kind);
+                    let tool_var = format!("CMAKE_{}_COMPILER", kind);
+                    if !self.defined(&flag_var) {
                         let mut flagsflag = OsString::from("-D");
-                        flagsflag.push(&flag_var_alt);
+                        flagsflag.push(&flag_var);
                         flagsflag.push("=");
                         flagsflag.push(extra);
                         for arg in compiler.args() {
@@ -751,50 +775,75 @@ impl Config {
                         }
                         cmd.arg(flagsflag);
                     }
-                }
 
-                // Apparently cmake likes to have an absolute path to the
-                // compiler as otherwise it sometimes thinks that this variable
-                // changed as it thinks the found compiler, /usr/bin/cc,
-                // differs from the specified compiler, cc. Not entirely sure
-                // what's up, but at least this means cmake doesn't get
-                // confused?
-                //
-                // Also specify this on Windows only if we use MSVC with Ninja,
-                // as it's not needed for MSVC with Visual Studio generators and
-                // for MinGW it doesn't really vary.
-                if !self.defined("CMAKE_TOOLCHAIN_FILE")
-                    && !self.defined(&tool_var)
-                    && (env::consts::FAMILY != "windows" || (msvc && is_ninja))
-                {
-                    let mut ccompiler = OsString::from("-D");
-                    ccompiler.push(&tool_var);
-                    ccompiler.push("=");
-                    ccompiler.push(find_exe(compiler.path()));
-                    #[cfg(windows)]
-                    {
-                        // CMake doesn't like unescaped `\`s in compiler paths
-                        // so we either have to escape them or replace with `/`s.
-                        use std::os::windows::ffi::{OsStrExt, OsStringExt};
-                        let wchars = ccompiler
-                            .encode_wide()
-                            .map(|wchar| {
-                                if wchar == b'\\' as u16 {
-                                    '/' as u16
-                                } else {
-                                    wchar
+                    // The visual studio generator apparently doesn't respect
+                    // `CMAKE_C_FLAGS` but does respect `CMAKE_C_FLAGS_RELEASE` and
+                    // such. We need to communicate /MD vs /MT, so set those vars
+                    // here.
+                    //
+                    // Note that for other generators, though, this *overrides*
+                    // things like the optimization flags, which is bad.
+                    if generator.is_none() && msvc {
+                        let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind, build_type_upcase);
+                        if !self.defined(&flag_var_alt) {
+                            let mut flagsflag = OsString::from("-D");
+                            flagsflag.push(&flag_var_alt);
+                            flagsflag.push("=");
+                            flagsflag.push(extra);
+                            for arg in compiler.args() {
+                                if skip_arg(arg) {
+                                    continue;
                                 }
-                            })
-                            .collect::<Vec<_>>();
-                        ccompiler = OsString::from_wide(&wchars);
+                                flagsflag.push(" ");
+                                flagsflag.push(arg);
+                            }
+                            cmd.arg(flagsflag);
+                        }
                     }
-                    cmd.arg(ccompiler);
-                }
-            };
 
-            set_compiler("C", &c_compiler, &self.cflags);
-            set_compiler("CXX", &cxx_compiler, &self.cxxflags);
-            set_compiler("ASM", &asm_compiler, &self.asmflags);
+                    // Apparently cmake likes to have an absolute path to the
+                    // compiler as otherwise it sometimes thinks that this variable
+                    // changed as it thinks the found compiler, /usr/bin/cc,
+                    // differs from the specified compiler, cc. Not entirely sure
+                    // what's up, but at least this means cmake doesn't get
+                    // confused?
+                    //
+                    // Also specify this on Windows only if we use MSVC with Ninja,
+                    // as it's not needed for MSVC with Visual Studio generators and
+                    // for MinGW it doesn't really vary.
+                    if !self.defined("CMAKE_TOOLCHAIN_FILE")
+                        && !self.defined(&tool_var)
+                        && (env::consts::FAMILY != "windows" || (msvc && is_ninja))
+                    {
+                        let mut ccompiler = OsString::from("-D");
+                        ccompiler.push(&tool_var);
+                        ccompiler.push("=");
+                        ccompiler.push(find_exe(compiler.path()));
+                        #[cfg(windows)]
+                        {
+                            // CMake doesn't like unescaped `\`s in compiler paths
+                            // so we either have to escape them or replace with `/`s.
+                            use std::os::windows::ffi::{OsStrExt, OsStringExt};
+                            let wchars = ccompiler
+                                .encode_wide()
+                                .map(|wchar| {
+                                    if wchar == b'\\' as u16 {
+                                        '/' as u16
+                                    } else {
+                                        wchar
+                                    }
+                                })
+                                .collect::<Vec<_>>();
+                            ccompiler = OsString::from_wide(&wchars);
+                        }
+                        cmd.arg(ccompiler);
+                    }
+                };
+
+                set_compiler("C", &c_compiler, &self.cflags);
+                set_compiler("CXX", &cxx_compiler, &self.cxxflags);
+                set_compiler("ASM", &asm_compiler, &self.asmflags);
+            }
         }
 
         if !self.defined("CMAKE_BUILD_TYPE") {
@@ -817,7 +866,7 @@ impl Config {
         }
 
         // And build!
-        let mut cmd = self.cmake_build_command(&target);
+        let mut cmd = Command::new(self.cmake_executable());
         cmd.current_dir(&build);
 
         for (k, v) in c_compiler.env().iter().chain(&self.env) {
@@ -880,36 +929,6 @@ impl Config {
     fn cmake_executable(&mut self) -> OsString {
         self.getenv_target_os("CMAKE")
             .unwrap_or_else(|| OsString::from("cmake"))
-    }
-
-    // If we are building for Emscripten, wrap the calls to CMake
-    // as "emcmake cmake ..." and "emmake cmake --build ...".
-    // https://emscripten.org/docs/compiling/Building-Projects.html
-
-    fn cmake_configure_command(&mut self, target: &str) -> Command {
-        if target.contains("emscripten") {
-            let emcmake = self
-                .getenv_target_os("EMCMAKE")
-                .unwrap_or_else(|| OsString::from("emcmake"));
-            let mut cmd = Command::new(emcmake);
-            cmd.arg(self.cmake_executable());
-            cmd
-        } else {
-            Command::new(self.cmake_executable())
-        }
-    }
-
-    fn cmake_build_command(&mut self, target: &str) -> Command {
-        if target.contains("emscripten") {
-            let emmake = self
-                .getenv_target_os("EMMAKE")
-                .unwrap_or_else(|| OsString::from("emmake"));
-            let mut cmd = Command::new(emmake);
-            cmd.arg(self.cmake_executable());
-            cmd
-        } else {
-            Command::new(self.cmake_executable())
-        }
     }
 
     fn getenv_os(&mut self, v: &str) -> Option<OsString> {
