@@ -1125,11 +1125,10 @@ fn fail(s: &str) -> ! {
 /// jobserver that uses a named pipe (fifo)
 fn uses_named_pipe_jobserver(makeflags: &OsStr) -> bool {
     makeflags
-        .to_str()
+        .to_string_lossy()
         // auth option as defined in
         // https://www.gnu.org/software/make/manual/html_node/POSIX-Jobserver.html#POSIX-Jobserver
-        .map(|flags| flags.contains("--jobserver-auth=fifo:"))
-        .unwrap_or(false)
+        .contains("--jobserver-auth=fifo:")
 }
 
 #[cfg(test)]
