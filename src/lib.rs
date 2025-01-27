@@ -837,16 +837,22 @@ impl Config {
         let mut use_jobserver = false;
         if fs::metadata(build.join("Makefile")).is_ok() {
             match env::var_os("CARGO_MAKEFLAGS") {
-                // Only do this on non-windows and non-bsd
-                // On Windows, we could be invoking make instead of
-                // mingw32-make which doesn't work with our jobserver
-                // bsdmake also does not work with our job server
+                // Only do this on non-windows, non-bsd, and non-macos (unless a named pipe
+                // jobserver is available)
+                // * On Windows, we could be invoking make instead of
+                //   mingw32-make which doesn't work with our jobserver
+                // * bsdmake also does not work with our job server
+                // * On macOS, CMake blocks propagation of the jobserver's file descriptors to make
+                //   However, if the jobserver is based on a named pipe, this will be available to
+                //   the build.
                 Some(ref makeflags)
                     if !(cfg!(windows)
                         || cfg!(target_os = "openbsd")
                         || cfg!(target_os = "netbsd")
                         || cfg!(target_os = "freebsd")
-                        || cfg!(target_os = "dragonfly")) =>
+                        || cfg!(target_os = "dragonfly")
+                        || (cfg!(target_os = "macos")
+                            && !uses_named_pipe_jobserver(makeflags))) =>
                 {
                     use_jobserver = true;
                     cmd.env("MAKEFLAGS", makeflags);
@@ -1115,8 +1121,19 @@ fn fail(s: &str) -> ! {
     panic!("\n{}\n\nbuild script failed, must exit now", s)
 }
 
+/// Returns whether the given MAKEFLAGS indicate that there is an available
+/// jobserver that uses a named pipe (fifo)
+fn uses_named_pipe_jobserver(makeflags: &OsStr) -> bool {
+    makeflags
+        .to_string_lossy()
+        // auth option as defined in
+        // https://www.gnu.org/software/make/manual/html_node/POSIX-Jobserver.html#POSIX-Jobserver
+        .contains("--jobserver-auth=fifo:")
+}
+
 #[cfg(test)]
 mod tests {
+    use super::uses_named_pipe_jobserver;
     use super::Version;
 
     #[test]
@@ -1131,5 +1148,15 @@ CMake suite maintained and supported by Kitware (kitware.com/cmake).
         assert!(Version::new(3, 22) < Version::new(3, 23));
 
         let _v = Version::from_command("cmake".as_ref()).unwrap();
+    }
+
+    #[test]
+    fn test_uses_fifo_jobserver() {
+        assert!(uses_named_pipe_jobserver(
+            "-j --jobserver-auth=fifo:/foo".as_ref()
+        ));
+        assert!(!uses_named_pipe_jobserver(
+            "-j --jobserver-auth=8:9".as_ref()
+        ));
     }
 }
