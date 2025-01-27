@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.1.53](https://github.com/rust-lang/cmake-rs/compare/v0.1.52...v0.1.53) - 2025-01-27
+
+### Other
+
+- Disable broken Make jobserver support on OSX to fix parallel builds ([#229](https://github.com/rust-lang/cmake-rs/pull/229))
+
 ## [0.1.52](https://github.com/rust-lang/cmake-rs/compare/v0.1.51...v0.1.52) - 2024-11-25
 
 ### Other
