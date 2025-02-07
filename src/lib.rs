@@ -440,13 +440,7 @@ impl Config {
     pub fn build(&mut self) -> PathBuf {
         let target = match self.target.clone() {
             Some(t) => t,
-            None => {
-                let mut t = getenv_unwrap("TARGET");
-                if t.ends_with("-darwin") && self.uses_cxx11 {
-                    t += "11"
-                }
-                t
-            }
+            None => getenv_unwrap("TARGET"),
         };
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
 
