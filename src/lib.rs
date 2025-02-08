@@ -387,6 +387,7 @@ impl Config {
     ///
     /// This does not otherwise affect any CXX flags, i.e. it does not set
     /// -std=c++11 or -stdlib=libc++.
+    #[deprecated = "no longer does anything, C++ is determined based on `cc::Build`, and the macOS issue has been fixed upstream"]
     pub fn uses_cxx11(&mut self) -> &mut Config {
         self.uses_cxx11 = true;
         self
