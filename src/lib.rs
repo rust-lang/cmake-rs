@@ -275,8 +275,11 @@ impl Config {
     /// Registers a dependency for this compilation on the native library built
     /// by Cargo previously.
     ///
-    /// This registration will modify the `CMAKE_PREFIX_PATH` environment
-    /// variable for the build system generation step.
+    /// This registration will update the `CMAKE_PREFIX_PATH` environment
+    /// variable for the [`build`][Self::build] system generation step.  The
+    /// path will be updated to include the content of the environment
+    /// variable `DEP_XXX_ROOT`, where `XXX` is replaced with the uppercased
+    /// value of `dep` (if that variable exists).
     pub fn register_dep(&mut self, dep: &str) -> &mut Config {
         self.deps.push(dep.to_string());
         self
