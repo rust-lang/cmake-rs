@@ -724,14 +724,14 @@ impl Config {
                     let mut flagsflag = OsString::from("-D");
                     flagsflag.push(&flag_var);
                     flagsflag.push("=");
-                    flagsflag.push(extra);
                     for arg in compiler.args() {
                         if skip_arg(arg) {
                             continue;
                         }
-                        flagsflag.push(" ");
                         flagsflag.push(arg);
+                        flagsflag.push(" ");
                     }
+                    flagsflag.push(extra);
                     cmd.arg(flagsflag);
                 }
 
