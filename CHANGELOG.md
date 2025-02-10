@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.1.54](https://github.com/rust-lang/cmake-rs/compare/v0.1.53...v0.1.54) - 2025-02-10
+
+### Other
+
+- Remove workaround for broken `cc-rs` versions ([#235](https://github.com/rust-lang/cmake-rs/pull/235))
+- Be more precise in the description of `register_dep` ([#238](https://github.com/rust-lang/cmake-rs/pull/238))
+
 ## [0.1.53](https://github.com/rust-lang/cmake-rs/compare/v0.1.52...v0.1.53) - 2025-01-27
 
 ### Other
