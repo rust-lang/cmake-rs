@@ -55,6 +55,17 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Helper macro for emitting warnings.
+macro_rules! warn {
+    ($($arg:tt)*) => {
+        if $crate::in_build_script() {
+            std::println!("cargo:warning={}", std::format_args!($($arg)*));
+        } else {
+            std::eprintln!("Warning: {}", std::format_args!($($arg)*));
+        }
+    };
+}
+
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
     path: PathBuf,
@@ -135,8 +146,8 @@ impl Config {
                 "debug" => RustProfile::Debug,
                 "release" | "bench" => RustProfile::Release,
                 unknown => {
-                    eprintln!(
-                        "Warning: unknown Rust profile={}; defaulting to a release build.",
+                    warn!(
+                        "unknown Rust profile={}; defaulting to a release build.",
                         unknown
                     );
                     RustProfile::Release
@@ -152,8 +163,8 @@ impl Config {
                         RustProfile::Debug => OptLevel::Debug,
                         RustProfile::Release => OptLevel::Release,
                     };
-                    eprintln!(
-                        "Warning: unknown opt-level={}; defaulting to a {:?} build.",
+                    warn!(
+                        "unknown opt-level={}; defaulting to a {:?} build.",
                         unknown, default_opt_level
                     );
                     default_opt_level
@@ -164,7 +175,7 @@ impl Config {
                 "false" => false,
                 "true" => true,
                 unknown => {
-                    eprintln!("Warning: unknown debug={}; defaulting to `true`.", unknown);
+                    warn!("unknown debug={}; defaulting to `true`.", unknown);
                     true
                 }
             };
@@ -450,60 +461,21 @@ impl Config {
         if !self.defined("CMAKE_TOOLCHAIN_FILE") {
             if let Some(s) = self.getenv_target_os("CMAKE_TOOLCHAIN_FILE") {
                 self.define("CMAKE_TOOLCHAIN_FILE", s);
-            } else if target.contains("redox") {
-                if !self.defined("CMAKE_SYSTEM_NAME") {
-                    self.define("CMAKE_SYSTEM_NAME", "Generic");
-                }
-            } else if target != host && !self.defined("CMAKE_SYSTEM_NAME") {
-                // Set CMAKE_SYSTEM_NAME and CMAKE_SYSTEM_PROCESSOR when cross compiling
-                let os = getenv_unwrap("CARGO_CFG_TARGET_OS");
-                let arch = getenv_unwrap("CARGO_CFG_TARGET_ARCH");
-                // CMAKE_SYSTEM_NAME list
-                // https://gitlab.kitware.com/cmake/cmake/-/issues/21489#note_1077167
+            } else if target != host {
+                // Set `CMAKE_SYSTEM_NAME` and `CMAKE_SYSTEM_PROCESSOR` to
+                // allow cross-compiling to work.
                 //
-                // CMAKE_SYSTEM_PROCESSOR
-                // some of the values come from https://en.wikipedia.org/wiki/Uname
-                let (system_name, system_processor) = match (os.as_str(), arch.as_str()) {
-                    ("android", "arm") => ("Android", "armv7-a"),
-                    ("android", "x86") => ("Android", "i686"),
-                    ("android", arch) => ("Android", arch),
-                    ("dragonfly", arch) => ("DragonFly", arch),
-                    ("macos", "aarch64") => ("Darwin", "arm64"),
-                    ("macos", arch) => ("Darwin", arch),
-                    ("freebsd", "x86_64") => ("FreeBSD", "amd64"),
-                    ("freebsd", arch) => ("FreeBSD", arch),
-                    ("fuchsia", arch) => ("Fuchsia", arch),
-                    ("haiku", arch) => ("Haiku", arch),
-                    ("ios", "aarch64") => ("iOS", "arm64"),
-                    ("ios", arch) => ("iOS", arch),
-                    ("linux", arch) => {
-                        let name = "Linux";
-                        match arch {
-                            "powerpc" => (name, "ppc"),
-                            "powerpc64" => (name, "ppc64"),
-                            "powerpc64le" => (name, "ppc64le"),
-                            _ => (name, arch),
-                        }
-                    }
-                    ("netbsd", arch) => ("NetBSD", arch),
-                    ("openbsd", "x86_64") => ("OpenBSD", "amd64"),
-                    ("openbsd", arch) => ("OpenBSD", arch),
-                    ("solaris", arch) => ("SunOS", arch),
-                    ("tvos", "aarch64") => ("tvOS", "arm64"),
-                    ("tvos", arch) => ("tvOS", arch),
-                    ("visionos", "aarch64") => ("visionOS", "arm64"),
-                    ("visionos", arch) => ("visionOS", arch),
-                    ("watchos", "aarch64") => ("watchOS", "arm64"),
-                    ("watchos", arch) => ("watchOS", arch),
-                    ("windows", "x86_64") => ("Windows", "AMD64"),
-                    ("windows", "x86") => ("Windows", "X86"),
-                    ("windows", "aarch64") => ("Windows", "ARM64"),
-                    ("none", arch) => ("Generic", arch),
-                    // Others
-                    (os, arch) => (os, arch),
-                };
-                self.define("CMAKE_SYSTEM_NAME", system_name);
-                self.define("CMAKE_SYSTEM_PROCESSOR", system_processor);
+                // FIXME: Also set `CMAKE_SYSTEM_VERSION` somehow?
+
+                if !self.defined("CMAKE_SYSTEM_NAME") {
+                    let system_name = get_system_name(&target);
+                    self.define("CMAKE_SYSTEM_NAME", system_name);
+                }
+
+                if !self.defined("CMAKE_SYSTEM_PROCESSOR") {
+                    let system_processor = get_system_processor(&target);
+                    self.define("CMAKE_SYSTEM_PROCESSOR", system_processor);
+                }
             }
         }
 
@@ -670,14 +642,12 @@ impl Config {
                     panic!("unsupported msvc target: {}", target);
                 }
             }
-        } else if target.contains("darwin") && !self.defined("CMAKE_OSX_ARCHITECTURES") {
-            if target.contains("x86_64") {
-                cmd.arg("-DCMAKE_OSX_ARCHITECTURES=x86_64");
-            } else if target.contains("aarch64") {
-                cmd.arg("-DCMAKE_OSX_ARCHITECTURES=arm64");
-            } else {
-                panic!("unsupported darwin target: {}", target);
-            }
+        }
+        if target.contains("apple") && !self.defined("CMAKE_OSX_ARCHITECTURES") {
+            // Make sure that CMake does not build universal binaries on macOS.
+            // Explicitly specify the one single target architecture.
+            let arch = get_system_processor(&target);
+            self.define("CMAKE_OSX_ARCHITECTURES", arch);
         }
         if let Some(ref generator) = generator {
             cmd.arg("-G").arg(generator);
@@ -1017,10 +987,7 @@ impl Config {
                     None => true,
                 };
                 if needs_cleanup {
-                    println!(
-                        "detected home dir change, cleaning out entire build \
-                         directory"
-                    );
+                    warn!("detected home dir change, cleaning out entire build directory");
                     fs::remove_dir_all(dir).unwrap();
                 }
                 break;
@@ -1119,6 +1086,11 @@ fn fail(s: &str) -> ! {
     panic!("\n{}\n\nbuild script failed, must exit now", s)
 }
 
+/// Try to guess whether we're running in a build.rs script.
+fn in_build_script() -> bool {
+    env::var_os("TARGET").is_some()
+}
+
 /// Returns whether the given MAKEFLAGS indicate that there is an available
 /// jobserver that uses a named pipe (fifo)
 fn uses_named_pipe_jobserver(makeflags: &OsStr) -> bool {
@@ -1127,6 +1099,128 @@ fn uses_named_pipe_jobserver(makeflags: &OsStr) -> bool {
         // auth option as defined in
         // https://www.gnu.org/software/make/manual/html_node/POSIX-Jobserver.html#POSIX-Jobserver
         .contains("--jobserver-auth=fifo:")
+}
+
+/// Find [`CMAKE_SYSTEM_NAME`] based on `$CARGO_CFG_TARGET_OS` if available,
+/// otherwise try to infer it from the given target.
+///
+/// [`CMAKE_SYSTEM_NAME`]: https://cmake.org/cmake/help/latest/variable/CMAKE_SYSTEM_NAME.html
+fn get_system_name(target: &str) -> &'static str {
+    let mapping = [
+        ("aix", "AIX"),
+        ("android", "Android"), // Matches "*-linux-android*".
+        ("cygwin", "CYGWIN"),
+        ("darwin", "Darwin"), // Matches target triple "*-apple-darwin".
+        ("dragonfly", "DragonFly"),
+        ("emscripten", "Emscripten"),
+        ("freebsd", "FreeBSD"),
+        ("fuchsia", "Fuchsia"),
+        ("haiku", "Haiku"),
+        ("illumos", "SunOS"),
+        ("ios", "iOS"),
+        ("linux", "Linux"),  // Must be after "android".
+        ("macos", "Darwin"), // Used when matching `CARGO_CFG_TARGET_OS`.
+        ("netbsd", "NetBSD"),
+        ("openbsd", "OpenBSD"),
+        ("redox", "Generic"),
+        ("solaris", "SunOS"),
+        ("tvos", "tvOS"),
+        ("visionos", "visionOS"),
+        ("wasi", "WASI"),
+        ("watchos", "watchOS"),
+        ("windows", "Windows"),
+        ("none", "Generic"), // Must be last match to handle x86_64-unknown-linux-none.
+    ];
+
+    // `CARGO_CFG_TARGET_OS` is available when in build.rs, and is usually
+    // more correct than trying to extract the value from `TARGET`.
+    if let Some(os) = std::env::var_os("CARGO_CFG_TARGET_OS") {
+        let os = os.to_str().expect("CARGO_CFG_TARGET_OS must be UTF-8");
+        for (known_os, system_name) in mapping {
+            if os == known_os {
+                return system_name;
+            }
+        }
+    } else {
+        for (known_os, system_name) in mapping {
+            // Fuzzy find based on `target`.
+            // This is brittle, and should ideally be avoided.
+            if target.contains(known_os) {
+                return system_name;
+            }
+        }
+    }
+
+    warn!("unknown OS for target {target:?}, falling back to Generic");
+    "Generic"
+}
+
+/// Find [`CMAKE_SYSTEM_PROCESSOR`] based on the given `arch` if available,
+/// otherwise try to infer it from the given target.
+///
+/// [`CMAKE_SYSTEM_PROCESSOR`]: https://cmake.org/cmake/help/latest/variable/CMAKE_SYSTEM_PROCESSOR.html#system-names-known-to-cmake
+fn get_system_processor(target: &str) -> &str {
+    let (full_arch, _) = target
+        .split_once("-")
+        .expect("rustc target must have at least two components");
+
+    // `CMAKE_SYSTEM_PROCESSOR` is based on `CMAKE_HOST_SYSTEM_PROCESSOR`,
+    // which is set differently based on platform.
+
+    // Windows: Value of `$PROCESSOR_ARCHITECTURE` by default.
+    if target.contains("windows") {
+        return match full_arch {
+            "i586" | "i686" => "X86",
+            "x86_64" => "AMD64",
+            "aarch64" => "ARM64",
+            "arm64ec" => "AMD64", // Unsure
+            arch => {
+                warn!("unknown architecture {arch} in target {target:?}");
+                arch
+            }
+        };
+    }
+
+    // macOS/Apple: Same as the `-arch` value expected by the linker.
+    if target.contains("apple") {
+        return match full_arch {
+            // Renamed
+            "aarch64" => "arm64",
+            "i686" => "i386",
+            "powerpc" => "ppc",
+            "powerpc64" => "ppc64",
+            // Unchanged
+            "arm64_32" => "arm64_32",
+            "arm64e" => "arm64e",
+            "armv7" => "armv7",
+            "armv7k" => "armv7k",
+            "armv7s" => "armv7s",
+            "i386" => "i386",
+            "x86_64" => "x86_64",
+            "x86_64h" => "x86_64h",
+            arch => {
+                warn!("unknown architecture {arch} in target {target:?}");
+                arch
+            }
+        };
+    }
+
+    // Unix, `uname -m` on most platforms by default.
+    match full_arch {
+        "arm" if target.contains("android") => "armv6-a",
+        "armv7" if target.contains("android") => "armv7-a",
+        "i686" if target.contains("android") => "i686",
+        "i386" | "i486" | "i586" | "i686" | "i786" => "x86",
+        "powerpc" => "ppc",
+        "powerpc64" => "ppc64",
+        "powerpc64le" => "ppc64le",
+        "x86_64" if target.contains("openbsd") || target.contains("freebsd") => "amd64",
+        "x86_64" => "x86_64",
+        arch if arch.starts_with("arm") => "arm",
+        arch if arch.starts_with("thumb") => "thumb",
+        // TODO: Do we need to handle more here?
+        arch => arch,
+    }
 }
 
 #[cfg(test)]
