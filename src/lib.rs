@@ -55,6 +55,17 @@ use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Helper macro for emitting warnings.
+macro_rules! warn {
+    ($($arg:tt)*) => {
+        if $crate::in_build_script() {
+            std::println!("cargo:warning={}", std::format_args!($($arg)*));
+        } else {
+            std::eprintln!("Warning: {}", std::format_args!($($arg)*));
+        }
+    };
+}
+
 /// Builder style configuration for a pending CMake build.
 pub struct Config {
     path: PathBuf,
@@ -135,8 +146,8 @@ impl Config {
                 "debug" => RustProfile::Debug,
                 "release" | "bench" => RustProfile::Release,
                 unknown => {
-                    eprintln!(
-                        "Warning: unknown Rust profile={}; defaulting to a release build.",
+                    warn!(
+                        "unknown Rust profile={}; defaulting to a release build.",
                         unknown
                     );
                     RustProfile::Release
@@ -152,8 +163,8 @@ impl Config {
                         RustProfile::Debug => OptLevel::Debug,
                         RustProfile::Release => OptLevel::Release,
                     };
-                    eprintln!(
-                        "Warning: unknown opt-level={}; defaulting to a {:?} build.",
+                    warn!(
+                        "unknown opt-level={}; defaulting to a {:?} build.",
                         unknown, default_opt_level
                     );
                     default_opt_level
@@ -164,7 +175,7 @@ impl Config {
                 "false" => false,
                 "true" => true,
                 unknown => {
-                    eprintln!("Warning: unknown debug={}; defaulting to `true`.", unknown);
+                    warn!("unknown debug={}; defaulting to `true`.", unknown);
                     true
                 }
             };
@@ -1017,10 +1028,7 @@ impl Config {
                     None => true,
                 };
                 if needs_cleanup {
-                    println!(
-                        "detected home dir change, cleaning out entire build \
-                         directory"
-                    );
+                    warn!("detected home dir change, cleaning out entire build directory");
                     fs::remove_dir_all(dir).unwrap();
                 }
                 break;
@@ -1117,6 +1125,11 @@ fn getenv_unwrap(v: &str) -> String {
 
 fn fail(s: &str) -> ! {
     panic!("\n{}\n\nbuild script failed, must exit now", s)
+}
+
+/// Try to guess whether we're running in a build.rs script.
+fn in_build_script() -> bool {
+    env::var_os("TARGET").is_some()
 }
 
 /// Returns whether the given MAKEFLAGS indicate that there is an available
