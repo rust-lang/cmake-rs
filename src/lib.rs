@@ -77,6 +77,7 @@ pub struct Config {
     uses_cxx11: bool,
     always_configure: bool,
     no_build_target: bool,
+    no_default_flags: bool,
     verbose_cmake: bool,
     verbose_make: bool,
     pic: Option<bool>,
@@ -184,6 +185,7 @@ impl Config {
             path: env::current_dir().unwrap().join(path),
             generator: None,
             generator_toolset: None,
+            no_default_flags: false,
             cflags: OsString::new(),
             cxxflags: OsString::new(),
             asmflags: OsString::new(),
@@ -273,8 +275,11 @@ impl Config {
     /// Registers a dependency for this compilation on the native library built
     /// by Cargo previously.
     ///
-    /// This registration will modify the `CMAKE_PREFIX_PATH` environment
-    /// variable for the build system generation step.
+    /// This registration will update the `CMAKE_PREFIX_PATH` environment
+    /// variable for the [`build`][Self::build] system generation step.  The
+    /// path will be updated to include the content of the environment
+    /// variable `DEP_XXX_ROOT`, where `XXX` is replaced with the uppercased
+    /// value of `dep` (if that variable exists).
     pub fn register_dep(&mut self, dep: &str) -> &mut Config {
         self.deps.push(dep.to_string());
         self
@@ -294,6 +299,13 @@ impl Config {
     /// Note that this isn't related to the target triple passed to the compiler!
     pub fn no_build_target(&mut self, no_build_target: bool) -> &mut Config {
         self.no_build_target = no_build_target;
+        self
+    }
+
+    /// Disables the generation of default compiler flags. The default compiler
+    /// flags may cause conflicts in some cross compiling scenarios.
+    pub fn no_default_flags(&mut self, no_default_flags: bool) -> &mut Config {
+        self.no_default_flags = no_default_flags;
         self
     }
 
@@ -375,6 +387,7 @@ impl Config {
     ///
     /// This does not otherwise affect any CXX flags, i.e. it does not set
     /// -std=c++11 or -stdlib=libc++.
+    #[deprecated = "no longer does anything, C++ is determined based on `cc::Build`, and the macOS issue has been fixed upstream"]
     pub fn uses_cxx11(&mut self) -> &mut Config {
         self.uses_cxx11 = true;
         self
@@ -428,13 +441,7 @@ impl Config {
     pub fn build(&mut self) -> PathBuf {
         let target = match self.target.clone() {
             Some(t) => t,
-            None => {
-                let mut t = getenv_unwrap("TARGET");
-                if t.ends_with("-darwin") && self.uses_cxx11 {
-                    t += "11"
-                }
-                t
-            }
+            None => getenv_unwrap("TARGET"),
         };
         let host = self.host.clone().unwrap_or_else(|| getenv_unwrap("HOST"));
 
@@ -515,7 +522,7 @@ impl Config {
             .debug(false)
             .warnings(false)
             .host(&host)
-            .no_default_flags(ndk);
+            .no_default_flags(ndk || self.no_default_flags);
         if !ndk {
             c_cfg.target(&target);
         }
@@ -527,7 +534,7 @@ impl Config {
             .debug(false)
             .warnings(false)
             .host(&host)
-            .no_default_flags(ndk);
+            .no_default_flags(ndk || self.no_default_flags);
         if !ndk {
             cxx_cfg.target(&target);
         }
@@ -828,16 +835,22 @@ impl Config {
         let mut use_jobserver = false;
         if fs::metadata(build.join("Makefile")).is_ok() {
             match env::var_os("CARGO_MAKEFLAGS") {
-                // Only do this on non-windows and non-bsd
-                // On Windows, we could be invoking make instead of
-                // mingw32-make which doesn't work with our jobserver
-                // bsdmake also does not work with our job server
+                // Only do this on non-windows, non-bsd, and non-macos (unless a named pipe
+                // jobserver is available)
+                // * On Windows, we could be invoking make instead of
+                //   mingw32-make which doesn't work with our jobserver
+                // * bsdmake also does not work with our job server
+                // * On macOS, CMake blocks propagation of the jobserver's file descriptors to make
+                //   However, if the jobserver is based on a named pipe, this will be available to
+                //   the build.
                 Some(ref makeflags)
                     if !(cfg!(windows)
                         || cfg!(target_os = "openbsd")
                         || cfg!(target_os = "netbsd")
                         || cfg!(target_os = "freebsd")
-                        || cfg!(target_os = "dragonfly")) =>
+                        || cfg!(target_os = "dragonfly")
+                        || (cfg!(target_os = "macos")
+                            && !uses_named_pipe_jobserver(makeflags))) =>
                 {
                     use_jobserver = true;
                     cmd.env("MAKEFLAGS", makeflags);
@@ -1106,8 +1119,19 @@ fn fail(s: &str) -> ! {
     panic!("\n{}\n\nbuild script failed, must exit now", s)
 }
 
+/// Returns whether the given MAKEFLAGS indicate that there is an available
+/// jobserver that uses a named pipe (fifo)
+fn uses_named_pipe_jobserver(makeflags: &OsStr) -> bool {
+    makeflags
+        .to_string_lossy()
+        // auth option as defined in
+        // https://www.gnu.org/software/make/manual/html_node/POSIX-Jobserver.html#POSIX-Jobserver
+        .contains("--jobserver-auth=fifo:")
+}
+
 #[cfg(test)]
 mod tests {
+    use super::uses_named_pipe_jobserver;
     use super::Version;
 
     #[test]
@@ -1122,5 +1146,15 @@ CMake suite maintained and supported by Kitware (kitware.com/cmake).
         assert!(Version::new(3, 22) < Version::new(3, 23));
 
         let _v = Version::from_command("cmake".as_ref()).unwrap();
+    }
+
+    #[test]
+    fn test_uses_fifo_jobserver() {
+        assert!(uses_named_pipe_jobserver(
+            "-j --jobserver-auth=fifo:/foo".as_ref()
+        ));
+        assert!(!uses_named_pipe_jobserver(
+            "-j --jobserver-auth=8:9".as_ref()
+        ));
     }
 }
