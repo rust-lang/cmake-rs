@@ -136,8 +136,7 @@ impl Config {
                 "release" | "bench" => RustProfile::Release,
                 unknown => {
                     eprintln!(
-                        "Warning: unknown Rust profile={}; defaulting to a release build.",
-                        unknown
+                        "Warning: unknown Rust profile={unknown}; defaulting to a release build."
                     );
                     RustProfile::Release
                 }
@@ -153,8 +152,7 @@ impl Config {
                         RustProfile::Release => OptLevel::Release,
                     };
                     eprintln!(
-                        "Warning: unknown opt-level={}; defaulting to a {:?} build.",
-                        unknown, default_opt_level
+                        "Warning: unknown opt-level={unknown}; defaulting to a {default_opt_level:?} build."
                     );
                     default_opt_level
                 }
@@ -164,7 +162,7 @@ impl Config {
                 "false" => false,
                 "true" => true,
                 unknown => {
-                    eprintln!("Warning: unknown debug={}; defaulting to `true`.", unknown);
+                    eprintln!("Warning: unknown debug={unknown}; defaulting to `true`.");
                     true
                 }
             };
@@ -562,7 +560,7 @@ impl Config {
         let mut cmake_prefix_path = Vec::new();
         for dep in &self.deps {
             let dep = dep.to_uppercase().replace('-', "_");
-            if let Some(root) = env::var_os(format!("DEP_{}_ROOT", dep)) {
+            if let Some(root) = env::var_os(format!("DEP_{dep}_ROOT")) {
                 cmake_prefix_path.push(PathBuf::from(root));
             }
         }
@@ -667,7 +665,7 @@ impl Config {
                     }
                     cmd.arg("-AWin32");
                 } else {
-                    panic!("unsupported msvc target: {}", target);
+                    panic!("unsupported msvc target: {target}");
                 }
             }
         } else if target.contains("apple") {
@@ -689,7 +687,7 @@ impl Config {
                 } else if target.contains("arm64_32") {
                     cmd.arg("-DCMAKE_OSX_ARCHITECTURES=arm64_32");
                 } else {
-                    panic!("unsupported apple target: {}", target);
+                    panic!("unsupported apple target: {target}");
                 }
             }
 
@@ -756,8 +754,8 @@ impl Config {
                 None => false,
             };
             let mut set_compiler = |kind: &str, compiler: &cc::Tool, extra: &OsString| {
-                let flag_var = format!("CMAKE_{}_FLAGS", kind);
-                let tool_var = format!("CMAKE_{}_COMPILER", kind);
+                let flag_var = format!("CMAKE_{kind}_FLAGS");
+                let tool_var = format!("CMAKE_{kind}_COMPILER");
                 if !self.defined(&flag_var) {
                     let mut flagsflag = OsString::from("-D");
                     flagsflag.push(&flag_var);
@@ -781,7 +779,7 @@ impl Config {
                 // Note that for other generators, though, this *overrides*
                 // things like the optimization flags, which is bad.
                 if generator.is_none() && msvc {
-                    let flag_var_alt = format!("CMAKE_{}_FLAGS_{}", kind, build_type_upcase);
+                    let flag_var_alt = format!("CMAKE_{kind}_FLAGS_{build_type_upcase}");
                     if !self.defined(&flag_var_alt) {
                         let mut flagsflag = OsString::from("-D");
                         flagsflag.push(&flag_var_alt);
@@ -843,7 +841,7 @@ impl Config {
         }
 
         if !self.defined("CMAKE_BUILD_TYPE") {
-            cmd.arg(format!("-DCMAKE_BUILD_TYPE={}", profile));
+            cmd.arg(format!("-DCMAKE_BUILD_TYPE={profile}"));
         }
 
         if self.verbose_make {
@@ -968,7 +966,7 @@ impl Config {
             return val.clone();
         }
         let r = env::var_os(v);
-        println!("{} = {:?}", v, r);
+        println!("{v} = {r:?}");
         self.env_cache.insert(v.to_string(), r.clone());
         r
     }
@@ -983,9 +981,9 @@ impl Config {
 
         let kind = if host == target { "HOST" } else { "TARGET" };
         let target_u = target.replace('-', "_");
-        self.getenv_os(&format!("{}_{}", var_base, target))
-            .or_else(|| self.getenv_os(&format!("{}_{}", var_base, target_u)))
-            .or_else(|| self.getenv_os(&format!("{}_{}", kind, var_base)))
+        self.getenv_os(&format!("{var_base}_{target}"))
+            .or_else(|| self.getenv_os(&format!("{var_base}_{target_u}")))
+            .or_else(|| self.getenv_os(&format!("{kind}_{var_base}")))
             .or_else(|| self.getenv_os(var_base))
     }
 
@@ -1013,7 +1011,7 @@ impl Config {
         {
             base.to_string()
         } else {
-            panic!("unsupported msvc target: {}", target);
+            panic!("unsupported msvc target: {target}");
         }
     }
 
@@ -1114,27 +1112,24 @@ impl Default for Version {
 }
 
 fn run(cmd: &mut Command, program: &str) {
-    println!("running: {:?}", cmd);
+    println!("running: {cmd:?}");
     let status = match cmd.status() {
         Ok(status) => status,
         Err(ref e) if e.kind() == ErrorKind::NotFound => {
             fail(&format!(
-                "failed to execute command: {}\nis `{}` not installed?",
-                e, program
+                "failed to execute command: {e}\nis `{program}` not installed?"
             ));
         }
-        Err(e) => fail(&format!("failed to execute command: {}", e)),
+        Err(e) => fail(&format!("failed to execute command: {e}")),
     };
     if !status.success() {
         if status.code() == Some(127) {
             fail(&format!(
-                "command did not execute successfully, got: {}, is `{}` not installed?",
-                status, program
+                "command did not execute successfully, got: {status}, is `{program}` not installed?"
             ));
         }
         fail(&format!(
-            "command did not execute successfully, got: {}",
-            status
+            "command did not execute successfully, got: {status}"
         ));
     }
 }
@@ -1149,12 +1144,12 @@ fn find_exe(path: &Path) -> PathBuf {
 fn getenv_unwrap(v: &str) -> String {
     match env::var(v) {
         Ok(s) => s,
-        Err(..) => fail(&format!("environment variable `{}` not defined", v)),
+        Err(..) => fail(&format!("environment variable `{v}` not defined")),
     }
 }
 
 fn fail(s: &str) -> ! {
-    panic!("\n{}\n\nbuild script failed, must exit now", s)
+    panic!("\n{s}\n\nbuild script failed, must exit now")
 }
 
 /// Returns whether the given MAKEFLAGS indicate that there is an available
