@@ -670,13 +670,51 @@ impl Config {
                     panic!("unsupported msvc target: {}", target);
                 }
             }
-        } else if target.contains("darwin") && !self.defined("CMAKE_OSX_ARCHITECTURES") {
-            if target.contains("x86_64") {
-                cmd.arg("-DCMAKE_OSX_ARCHITECTURES=x86_64");
-            } else if target.contains("aarch64") {
-                cmd.arg("-DCMAKE_OSX_ARCHITECTURES=arm64");
-            } else {
-                panic!("unsupported darwin target: {}", target);
+        } else if target.contains("apple") {
+            if !self.defined("CMAKE_OSX_ARCHITECTURES") {
+                if target.contains("x86_64") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=x86_64");
+                } else if target.contains("aarch64") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=arm64");
+                } else if target.contains("i686") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=i686");
+                } else if target.contains("arm64e") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=arm64e");
+                } else if target.contains("i386") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=i386");
+                } else if target.contains("armv7s") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=armv7s");
+                } else if target.contains("armv7k") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=armv7k");
+                } else if target.contains("arm64_32") {
+                    cmd.arg("-DCMAKE_OSX_ARCHITECTURES=arm64_32");
+                } else {
+                    panic!("unsupported apple target: {}", target);
+                }
+            }
+
+            if !self.defined("CMAKE_OSX_SYSROOT") {
+                if target.contains("macabi") {
+                    cmd.arg("-DCMAKE_OSX_SYSROOT=macosx");
+                } else if target.contains("sim") {
+                    if target.contains("ios") {
+                        cmd.arg("-DCMAKE_OSX_SYSROOT=iphonesimulator");
+                    } else if target.contains("tvos") {
+                        cmd.arg("-DCMAKE_OSX_SYSROOT=appletvsimulator");
+                    } else if target.contains("visionos") {
+                        cmd.arg("-DCMAKE_OSX_SYSROOT=xrsimulator");
+                    } else if target.contains("watchos") {
+                        cmd.arg("-DCMAKE_OSX_SYSROOT=watchsimulator");
+                    }
+                } else if target.contains("ios") {
+                    cmd.arg("-DCMAKE_OSX_SYSROOT=iphoneos");
+                } else if target.contains("tvos") {
+                    cmd.arg("-DCMAKE_OSX_SYSROOT=appletvos");
+                } else if target.contains("visionos") {
+                    cmd.arg("-DCMAKE_OSX_SYSROOT=xros");
+                } else if target.contains("watchos") {
+                    cmd.arg("-DCMAKE_OSX_SYSROOT=watchos");
+                }
             }
         }
         if let Some(ref generator) = generator {
