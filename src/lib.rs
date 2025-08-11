@@ -554,9 +554,11 @@ impl Config {
             .out_dir
             .clone()
             .unwrap_or_else(|| PathBuf::from(getenv_unwrap("OUT_DIR")));
-        let build = dst.join("build");
-        self.maybe_clear(&build);
-        let _ = fs::create_dir_all(&build);
+
+        let build_dir = try_canonicalize(&dst.join("build"));
+
+        self.maybe_clear(&build_dir);
+        let _ = fs::create_dir_all(&build_dir);
 
         // Add all our dependencies to our cmake paths
         let mut cmake_prefix_path = Vec::new();
@@ -582,7 +584,7 @@ impl Config {
             cmd.arg("--debug-output");
         }
 
-        cmd.arg(&self.path).current_dir(&build);
+        cmd.arg(&self.path).current_dir(&build_dir);
         let mut is_ninja = false;
         if let Some(ref generator) = generator {
             is_ninja = generator.to_string_lossy().contains("Ninja");
@@ -816,7 +818,7 @@ impl Config {
             cmd.env(k, v);
         }
 
-        if self.always_configure || !build.join("CMakeCache.txt").exists() {
+        if self.always_configure || !build_dir.join("CMakeCache.txt").exists() {
             cmd.args(&self.configure_args);
             run(cmd.env("CMAKE_PREFIX_PATH", cmake_prefix_path), "cmake");
         } else {
@@ -825,7 +827,7 @@ impl Config {
 
         // And build!
         let mut cmd = self.cmake_build_command(&target);
-        cmd.current_dir(&build);
+        cmd.current_dir(&build_dir);
 
         for (k, v) in c_compiler.env().iter().chain(&self.env) {
             cmd.env(k, v);
@@ -833,7 +835,7 @@ impl Config {
 
         // If the generated project is Makefile based we should carefully transfer corresponding CARGO_MAKEFLAGS
         let mut use_jobserver = false;
-        if fs::metadata(build.join("Makefile")).is_ok() {
+        if fs::metadata(build_dir.join("Makefile")).is_ok() {
             match env::var_os("CARGO_MAKEFLAGS") {
                 // Only do this on non-windows, non-bsd, and non-macos (unless a named pipe
                 // jobserver is available)
@@ -859,7 +861,7 @@ impl Config {
             }
         }
 
-        cmd.arg("--build").arg(&build);
+        cmd.arg("--build").arg(&build_dir);
 
         if !self.no_build_target {
             let target = self
@@ -995,7 +997,8 @@ impl Config {
         // CMake will apparently store canonicalized paths which normally
         // isn't relevant to us but we canonicalize it here to ensure
         // we're both checking the same thing.
-        let path = fs::canonicalize(&self.path).unwrap_or_else(|_| self.path.clone());
+        let path = try_canonicalize(&self.path);
+
         let mut f = match File::open(dir.join("CMakeCache.txt")) {
             Ok(f) => f,
             Err(..) => return,
@@ -1127,6 +1130,12 @@ fn uses_named_pipe_jobserver(makeflags: &OsStr) -> bool {
         // auth option as defined in
         // https://www.gnu.org/software/make/manual/html_node/POSIX-Jobserver.html#POSIX-Jobserver
         .contains("--jobserver-auth=fifo:")
+}
+
+/// Attempt to canonicalize; fall back to the original path if unsuccessful, in case `cmake` knows
+/// something we don't.
+fn try_canonicalize(path: &Path) -> PathBuf {
+    path.canonicalize().unwrap_or_else(|_| path.to_owned())
 }
 
 #[cfg(test)]
