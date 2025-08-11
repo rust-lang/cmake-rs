@@ -18,7 +18,7 @@ jobs:
           rustup component add clippy
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy --all-features --all-targets -- -D warnings
-  
+
   test:
     name: Test
     runs-on: ${{ matrix.os }}
@@ -133,9 +133,28 @@ jobs:
       - uses: actions/checkout@v4
       - run: |
           rustup update nightly --no-self-update
-          rustup default nightly 
+          rustup default nightly
       - uses: Swatinem/rust-cache@v2
       - run: cargo doc
+
+  msrv:
+    name: MSRV check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RUSTFLAGS: # No need to check warnings on old MSRV, unset `-Dwarnings`
+    steps:
+    - uses: actions/checkout@master
+    - name: Install Rust
+      run: |
+        msrv="$(
+          cargo metadata --format-version=1 |
+          jq -r '.packages[] | select(.name == "cmake") | .rust_version'
+        )"
+        echo "MSRV: $msrv"
+        rustup update "$msrv" --no-self-update && rustup default "$msrv"
+    - uses: Swatinem/rust-cache@v2
+    - run: cargo check
 
   success:
     needs:
@@ -145,6 +164,7 @@ jobs:
       - ios_cross_compile_test
       - rustfmt
       - doc
+      - msrv
     runs-on: ubuntu-latest
     # GitHub branch protection is exceedingly silly and treats "jobs skipped because a dependency
     # failed" as success. So we have to do some contortions to ensure the job fails if any of its
