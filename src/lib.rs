@@ -585,6 +585,9 @@ impl Config {
         }
 
         cmd.arg(&self.path).current_dir(&build_dir);
+
+        cmd.arg("-B").arg(&build_dir);
+
         let mut is_ninja = false;
         if let Some(ref generator) = generator {
             is_ninja = generator.to_string_lossy().contains("Ninja");
