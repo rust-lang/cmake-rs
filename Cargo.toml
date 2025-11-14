@@ -16,4 +16,4 @@ edition = "2021"
 rust-version = "1.65"
 
 [dependencies]
-cc = "1.1.0"
+cc = "1.2.46"
