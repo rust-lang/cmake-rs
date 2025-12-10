@@ -960,6 +960,7 @@ impl Config {
         use cc::windows_registry::{find_vs_version, VsVers};
 
         let base = match find_vs_version() {
+            Ok(VsVers::Vs18) => "Visual Studio 18 2026",
             Ok(VsVers::Vs17) => "Visual Studio 17 2022",
             Ok(VsVers::Vs16) => "Visual Studio 16 2019",
             Ok(VsVers::Vs15) => "Visual Studio 15 2017",
