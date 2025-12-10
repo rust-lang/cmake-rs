@@ -1139,7 +1139,29 @@ fn uses_named_pipe_jobserver(makeflags: &OsStr) -> bool {
 /// Attempt to canonicalize; fall back to the original path if unsuccessful, in case `cmake` knows
 /// something we don't.
 fn try_canonicalize(path: &Path) -> PathBuf {
-    path.canonicalize().unwrap_or_else(|_| path.to_owned())
+    let path = path.canonicalize().unwrap_or_else(|_| path.to_owned());
+    // On Windows, attempt to remove the verbatim prefix from the canonicalized path.
+    // FIXME(ChrisDenton): once MSRV is >=1.79 use `std::path::absolute` instead of canonicalize.
+    // That will avoid the need for this hack.
+    #[cfg(windows)]
+    {
+        use std::os::windows::ffi::{OsStrExt, OsStringExt};
+        let mut wide: Vec<u16> = path.as_os_str().encode_wide().collect();
+        if wide.starts_with(&[b'\\' as u16, b'\\' as u16, b'?' as u16, b'\\' as u16]) {
+            if wide.get(5..7) == Some(&[b':' as u16, b'\\' as u16]) {
+                // Convert \\?\C:\ to C:\
+                wide.copy_within(4.., 0);
+                wide.truncate(wide.len() - 4);
+            } else if wide.get(4..8) == Some(&[b'U' as u16, b'N' as u16, b'C' as u16, b'\\' as u16])
+            {
+                // Convert \\?\UNC\ to \\
+                wide.copy_within(8.., 2);
+                wide.truncate(wide.len() - (8 - 2));
+            }
+            return OsString::from_wide(&wide).into();
+        }
+    }
+    path
 }
 
 #[cfg(test)]
