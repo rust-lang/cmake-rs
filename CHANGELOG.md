@@ -2,6 +2,17 @@
 
 ## [Unreleased]
 
+## [0.1.55](https://github.com/rust-lang/cmake-rs/compare/v0.1.54...v0.1.55) - 2025-12-11
+
+### Other
+
+- Remove the `\\?\` prefix from paths ([#259](https://github.com/rust-lang/cmake-rs/pull/259))
+- Add Visual Studio 2026 support ([#255](https://github.com/rust-lang/cmake-rs/pull/255))
+- Make sure that cmake generate build files in current dir ([#194](https://github.com/rust-lang/cmake-rs/pull/194))
+- Set the MSRV to 1.65 and test this in CI
+- Canonicalize the build directory
+- Use `eprintln` instead to print the command running next ([#191](https://github.com/rust-lang/cmake-rs/pull/191))
+
 ## [0.1.54](https://github.com/rust-lang/cmake-rs/compare/v0.1.53...v0.1.54) - 2025-02-10
 
 ### Other
