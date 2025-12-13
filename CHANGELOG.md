@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+## [0.1.56](https://github.com/rust-lang/cmake-rs/compare/v0.1.55...v0.1.56) - 2025-12-13
+
+### Other
+
+- Fallback to bundled CMake if present ([#264](https://github.com/rust-lang/cmake-rs/pull/264))
+- Use `cmake -B` only for v3.13 and later ([#262](https://github.com/rust-lang/cmake-rs/pull/262))
+
 ## [0.1.55](https://github.com/rust-lang/cmake-rs/compare/v0.1.54...v0.1.55) - 2025-12-11
 
 ### Other
