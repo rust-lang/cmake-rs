@@ -897,8 +897,9 @@ impl Config {
         dst
     }
 
-    fn cmake_executable(&mut self) -> OsString {
+    fn cmake_executable(&mut self, target: &str) -> OsString {
         self.getenv_target_os("CMAKE")
+            .or_else(|| find_cmake_executable(target))
             .unwrap_or_else(|| OsString::from("cmake"))
     }
 
@@ -912,10 +913,10 @@ impl Config {
                 .getenv_target_os("EMCMAKE")
                 .unwrap_or_else(|| OsString::from("emcmake"));
             let mut cmd = Command::new(emcmake);
-            cmd.arg(self.cmake_executable());
+            cmd.arg(self.cmake_executable(target));
             cmd
         } else {
-            Command::new(self.cmake_executable())
+            Command::new(self.cmake_executable(target))
         }
     }
 
@@ -925,10 +926,10 @@ impl Config {
                 .getenv_target_os("EMMAKE")
                 .unwrap_or_else(|| OsString::from("emmake"));
             let mut cmd = Command::new(emmake);
-            cmd.arg(self.cmake_executable());
+            cmd.arg(self.cmake_executable(target));
             cmd
         } else {
-            Command::new(self.cmake_executable())
+            Command::new(self.cmake_executable(target))
         }
     }
 
@@ -1164,6 +1165,31 @@ fn try_canonicalize(path: &Path) -> PathBuf {
         }
     }
     path
+}
+
+#[cfg(windows)]
+fn find_cmake_executable(target: &str) -> Option<OsString> {
+    use cc::windows_registry::find_tool;
+
+    // Try to find cmake.exe bundled with MSVC, but only if there isn't another one in path
+    let cmake_in_path = env::split_paths(&env::var_os("PATH").unwrap_or(OsString::new()))
+        .any(|p| p.join("cmake.exe").exists());
+    if cmake_in_path {
+        None
+    } else {
+        find_tool(target, "devenv").and_then(|t| {
+            t.path()
+                .join("..\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe")
+                .canonicalize()
+                .ok()
+                .map(OsString::from)
+        })
+    }
+}
+
+#[cfg(not(windows))]
+fn find_cmake_executable(_target: &str) -> Option<OsString> {
+    None
 }
 
 #[cfg(test)]
