@@ -4,7 +4,7 @@
 
 ## [0.1.57](https://github.com/rust-lang/cmake-rs/compare/v0.1.56...v0.1.57) - 2025-12-17
 
-### Other
+### Fixed
 
 - Revert canonicalizing the build directory and make the path absolute instead ([#267](https://github.com/rust-lang/cmake-rs/pull/267))
 
