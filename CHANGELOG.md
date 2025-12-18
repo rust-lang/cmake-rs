@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.1.58](https://github.com/rust-lang/cmake-rs/compare/v0.1.57...v0.1.58) - 2025-12-18
+
+### Other
+
+- Switch to main ([#266](https://github.com/rust-lang/cmake-rs/pull/266))
+
 ## [0.1.57](https://github.com/rust-lang/cmake-rs/compare/v0.1.56...v0.1.57) - 2025-12-17
 
 ### Fixed
