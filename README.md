@@ -11,17 +11,17 @@ library.
 cmake = "0.1"
 ```
 
-The CMake executable is assumed to be `cmake` unless the `CMAKE`
-environmental variable is set.
+The CMake executable is assumed to be `cmake` unless the `CMAKE` environmental
+variable is set.
 
-# License
+## License
 
 This project is licensed under either of
 
  * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or
    https://www.apache.org/licenses/LICENSE-2.0)
  * MIT license ([LICENSE-MIT](LICENSE-MIT) or
-   https://opensource.org/licenses/MIT)
+   https://opensource.org/license/mit)
 
 at your option.
 
