@@ -1157,7 +1157,15 @@ fn fix_build_dir(path: &Path) -> PathBuf {
     if path.is_absolute() {
         return path.into();
     }
-    #[link(name = "kernel32", kind = "raw-dylib")]
+    #[cfg_attr(not(target_arch = "x86"), link(name = "kernel32", kind = "raw-dylib"))]
+    #[cfg_attr(
+        target_arch = "x86",
+        link(
+            name = "kernel32",
+            kind = "raw-dylib",
+            import_name_type = "undecorated"
+        )
+    )]
     extern "system" {
         fn GetFullPathNameW(
             lpfilename: *const u16,
