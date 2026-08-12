@@ -994,9 +994,10 @@ impl Config {
 
     // If a cmake project has previously been built (e.g. CMakeCache.txt already
     // exists), then cmake will choke if the source directory for the original
-    // project being built has changed. Detect this situation through the
-    // `CMAKE_HOME_DIRECTORY` variable that cmake emits and if it doesn't match
-    // we blow away the build directory and start from scratch (the recommended
+    // project being built has changed or the build directory has been moved.
+    // Detect these situations through the `CMAKE_HOME_DIRECTORY` and
+    // `CMAKE_CACHEFILE_DIR` variables that cmake emits. If either doesn't match,
+    // blow away the build directory and start from scratch (the recommended
     // solution apparently [1]).
     //
     // [1]: https://cmake.org/pipermail/cmake/2012-August/051545.html
@@ -1020,23 +1021,30 @@ impl Config {
         };
         let contents = String::from_utf8_lossy(&u8contents);
         drop(f);
+        let build_path = dir.canonicalize().unwrap_or_else(|_| dir.to_owned());
         for line in contents.lines() {
-            if line.starts_with("CMAKE_HOME_DIRECTORY") {
-                let needs_cleanup = match line.split('=').next_back() {
-                    Some(cmake_home) => fs::canonicalize(cmake_home)
+            let (key, expected, description) = if line.starts_with("CMAKE_HOME_DIRECTORY") {
+                ("CMAKE_HOME_DIRECTORY", &path, "home dir")
+            } else if line.starts_with("CMAKE_CACHEFILE_DIR") {
+                ("CMAKE_CACHEFILE_DIR", &build_path, "build dir")
+            } else {
+                continue;
+            };
+            let needs_cleanup = line
+                .split_once('=')
+                .map(|(_, cached_path)| {
+                    fs::canonicalize(cached_path)
                         .ok()
-                        .map(|cmake_home| cmake_home != path)
-                        .unwrap_or(true),
-                    None => true,
-                };
-                if needs_cleanup {
-                    println!(
-                        "detected home dir change, cleaning out entire build \
-                         directory"
-                    );
-                    fs::remove_dir_all(dir).unwrap();
-                }
-                break;
+                        .map(|cached_path| cached_path != *expected)
+                        .unwrap_or(true)
+                })
+                .unwrap_or(true);
+            if needs_cleanup {
+                println!(
+                    "detected {description} change in {key}, cleaning out entire build directory"
+                );
+                fs::remove_dir_all(dir).unwrap();
+                return;
             }
         }
     }
@@ -1224,8 +1232,48 @@ fn find_cmake_executable(_target: &str) -> Option<OsString> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+    use std::path::PathBuf;
+
     use super::uses_named_pipe_jobserver;
+    use super::Config;
     use super::Version;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let path = std::env::temp_dir().join(format!(
+            "cmake-rs-{name}-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = fs::remove_dir_all(&path);
+        fs::create_dir_all(&path).unwrap();
+        path
+    }
+
+    #[test]
+    fn clears_relocated_build_directory() {
+        let root = temp_dir("relocated-build");
+        let source = root.join("source");
+        let old_build = root.join("old-build");
+        let new_build = root.join("new-build");
+        fs::create_dir_all(&source).unwrap();
+        fs::create_dir_all(&old_build).unwrap();
+        fs::create_dir_all(&new_build).unwrap();
+        fs::write(
+            new_build.join("CMakeCache.txt"),
+            format!(
+                "CMAKE_HOME_DIRECTORY:INTERNAL={}\nCMAKE_CACHEFILE_DIR:INTERNAL={}\n",
+                source.display(),
+                old_build.display()
+            ),
+        )
+        .unwrap();
+
+        Config::new(&source).maybe_clear(&new_build);
+
+        assert!(!new_build.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn test_cmake_version() {
