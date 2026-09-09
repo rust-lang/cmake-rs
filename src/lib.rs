@@ -498,6 +498,7 @@ impl Config {
                     ("windows", "x86_64") => ("Windows", "AMD64"),
                     ("windows", "x86") => ("Windows", "X86"),
                     ("windows", "aarch64") => ("Windows", "ARM64"),
+                    ("windows", "arm64ec") => ("Windows", "ARM64EC"),
                     ("none", arch) => ("Generic", arch),
                     // Others
                     (os, arch) => (os, arch),
@@ -668,6 +669,11 @@ impl Config {
                         cmd.arg("-Thost=x64");
                     }
                     cmd.arg("-AARM64");
+                } else if target.contains("arm64ec") {
+                    if self.generator_toolset.is_none() {
+                        cmd.arg("-Thost=x64");
+                    }
+                    cmd.arg("-AARM64EC");
                 } else if target.contains("i686") {
                     if self.generator_toolset.is_none() {
                         cmd.arg("-Thost=x86");
@@ -978,7 +984,7 @@ impl Config {
             ),
             Err(msg) => panic!("{}", msg),
         };
-        if ["i686", "x86_64", "thumbv7a", "aarch64"]
+        if ["i686", "x86_64", "thumbv7a", "aarch64", "arm64ec"]
             .iter()
             .any(|t| target.contains(t))
         {
