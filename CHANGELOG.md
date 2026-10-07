@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [0.1.59](https://github.com/rust-lang/cmake-rs/compare/v0.1.58...v0.1.59) - 2026-10-07
+
+### Other
+
+- Switch to trusted publishing ([#281](https://github.com/rust-lang/cmake-rs/pull/281))
+
 ## [0.1.58](https://github.com/rust-lang/cmake-rs/compare/v0.1.57...v0.1.58) - 2026-03-26
 
 ### Fixed
