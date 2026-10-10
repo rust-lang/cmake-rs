@@ -819,7 +819,10 @@ impl Config {
             cmd.arg("-DCMAKE_VERBOSE_MAKEFILE:BOOL=ON");
         }
 
-        for (k, v) in c_compiler.env().iter().chain(&self.env) {
+        for (k, v) in c_compiler.get_envs() {
+            cmd.env(k, v);
+        }
+        for (k, v) in &self.env {
             cmd.env(k, v);
         }
 
@@ -834,7 +837,10 @@ impl Config {
         let mut cmd = self.cmake_build_command(&target);
         cmd.current_dir(&build_dir);
 
-        for (k, v) in c_compiler.env().iter().chain(&self.env) {
+        for (k, v) in c_compiler.get_envs() {
+            cmd.env(k, v);
+        }
+        for (k, v) in &self.env {
             cmd.env(k, v);
         }
 
