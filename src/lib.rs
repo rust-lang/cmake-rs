@@ -999,7 +999,8 @@ impl Config {
     // we blow away the build directory and start from scratch (the recommended
     // solution apparently [1]).
     //
-    // [1]: https://cmake.org/pipermail/cmake/2012-August/051545.html
+    // [1]: https://marc.info/?l=cmake&m=134489037402392
+    //      https://web.archive.org/web/20151026224449/https://cmake.org/pipermail/cmake/2012-August/051545.html
     fn maybe_clear(&self, dir: &Path) {
         // CMake will apparently store canonicalized paths which normally
         // isn't relevant to us but we canonicalize it here to ensure
