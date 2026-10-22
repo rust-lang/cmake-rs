@@ -507,6 +507,15 @@ impl Config {
             }
         }
 
+        // These environment variables are set by cargo-ndk when compiling for
+        // Android (since version 4.x).
+        if let Ok(abi) = env::var("ANDROID_ABI") {
+            self.define("ANDROID_ABI", abi);
+        }
+        if let Ok(platform) = env::var("ANDROID_PLATFORM") {
+            self.define("ANDROID_PLATFORM", platform);
+        }
+
         let generator = self
             .generator
             .clone()
