@@ -11,6 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - name: Install Rust
         run: |
           rustup update beta --no-self-update
@@ -28,6 +30,8 @@ jobs:
         rust: ["1.70", stable, beta, nightly]
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: |
         rustup update ${{ matrix.rust }} --no-self-update
@@ -72,6 +76,8 @@ jobs:
             test: false
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: |
         rustup update stable --no-self-update
@@ -103,6 +109,8 @@ jobs:
           - target: aarch64-apple-ios
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: |
         rustup update stable --no-self-update
@@ -121,6 +129,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: |
         rustup update stable --no-self-update
@@ -133,6 +143,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - run: |
           rustup update nightly --no-self-update
           rustup default nightly
@@ -147,6 +159,8 @@ jobs:
       RUSTFLAGS: # No need to check warnings on old MSRV, unset `-Dwarnings`
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: |
         msrv="$(
