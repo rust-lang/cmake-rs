@@ -74,6 +74,8 @@ jobs:
             test: false
           - target: x86_64-unknown-illumos
             test: false
+    env:
+      MATRIX_TARGET: ${{ matrix.platform.target }}
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
@@ -82,7 +84,7 @@ jobs:
       run: |
         rustup update stable --no-self-update
         rustup default stable
-        rustup target add ${{ matrix.platform.target }}
+        rustup target add ${MATRIX_TARGET}
     # FIXME: replace with taiki-e/install-action once a new cross version is released
     - name: Install cross
       run: RUSTFLAGS="" RUSTDOCFLAGS="" cargo install --git https://github.com/cross-rs/cross.git --rev a9301e91f72bba3850460512685f6b16062015ff cross
@@ -90,11 +92,11 @@ jobs:
     - name: cross version
       run: cross --version
     - name: cross test
-      run: cross test -vv --target ${{ matrix.platform.target }}
+      run: cross test -vv --target ${MATRIX_TARGET}
       working-directory: test-crate
       if: ${{ matrix.platform.test }}
     - name: cross build
-      run: cross build -vv --target ${{ matrix.platform.target }}
+      run: cross build -vv --target ${MATRIX_TARGET}
       working-directory: test-crate
       if: ${{ !matrix.platform.test }}
 
@@ -107,6 +109,8 @@ jobs:
       matrix:
         platform:
           - target: aarch64-apple-ios
+    env:
+      MATRIX_TARGET: ${{ matrix.platform.target }}
     steps:
     - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       with:
@@ -115,10 +119,10 @@ jobs:
       run: |
         rustup update stable --no-self-update
         rustup default stable
-        rustup target add ${{ matrix.platform.target }}
+        rustup target add ${MATRIX_TARGET}
     - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
     - name: build
-      run: cargo build -vv --target ${{ matrix.platform.target }}
+      run: cargo build -vv --target ${MATRIX_TARGET}
       working-directory: test-crate
       env:
         # If this isn't specified the default is iOS 7, for which zlib-ng will not compile due to the lack of thread-local storage.
