@@ -1,9 +1,6 @@
 name: Release-plz
 
-permissions:
-  pull-requests: write
-  contents: write
-  id-token: write
+permissions: {}
 
 on:
   push:
@@ -15,14 +12,19 @@ jobs:
     name: Release-plz
     runs-on: ubuntu-latest
     environment: publish
+    permissions:
+      contents: write # Required by `release-plz/action` to push tags, create releases, and push to the pull request branch.
+      pull-requests: write # Required by `release-plz/action` to detect the release PR and its commits (read only), and to create and update pull requests (write). 
+      id-token: write # Required by `release-plz/action` to obtain an OIDC token for Trusted Publishing.
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
       - name: Install Rust (rustup)
         run: rustup update stable --no-self-update && rustup default stable
       - name: Run release-plz
-        uses: MarcoIeni/release-plz-action@v0.5
+        uses: release-plz/action@66b324fd6c72d05d2a08568492ecdd62bfb8a62b # v0.5.148
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

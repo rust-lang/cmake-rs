@@ -1,6 +1,8 @@
 name: CI
 on: [push, pull_request]
 
+permissions: {}
+
 env:
   RUSTDOCFLAGS: -D warnings
   RUSTFLAGS: -D warnings
@@ -10,13 +12,15 @@ jobs:
     name: clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install Rust
         run: |
           rustup update beta --no-self-update
           rustup default beta
           rustup component add clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo clippy --all-features --all-targets -- -D warnings
 
   test:
@@ -27,12 +31,17 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: ["1.70", stable, beta, nightly]
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install Rust
+      shell: bash
       run: |
-        rustup update ${{ matrix.rust }} --no-self-update
-        rustup default ${{ matrix.rust }}
-    - uses: Swatinem/rust-cache@v2
+        rustup update ${MATRIX_RUST} --no-self-update
+        rustup default ${MATRIX_RUST}
+      env:
+        MATRIX_RUST: ${{ matrix.rust }}
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
     - run: cargo test
     - name: Integration test
       run: cargo test --manifest-path test-crate/Cargo.toml
@@ -70,25 +79,29 @@ jobs:
             test: false
           - target: x86_64-unknown-illumos
             test: false
+    env:
+      MATRIX_TARGET: ${{ matrix.platform.target }}
     steps:
-    - uses: actions/checkout@main
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: |
         rustup update stable --no-self-update
         rustup default stable
-        rustup target add ${{ matrix.platform.target }}
+        rustup target add ${MATRIX_TARGET}
     # FIXME: replace with taiki-e/install-action once a new cross version is released
     - name: Install cross
       run: RUSTFLAGS="" RUSTDOCFLAGS="" cargo install --git https://github.com/cross-rs/cross.git --rev a9301e91f72bba3850460512685f6b16062015ff cross
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
     - name: cross version
       run: cross --version
     - name: cross test
-      run: cross test -vv --target ${{ matrix.platform.target }}
+      run: cross test -vv --target ${MATRIX_TARGET}
       working-directory: test-crate
       if: ${{ matrix.platform.test }}
     - name: cross build
-      run: cross build -vv --target ${{ matrix.platform.target }}
+      run: cross build -vv --target ${MATRIX_TARGET}
       working-directory: test-crate
       if: ${{ !matrix.platform.test }}
 
@@ -101,16 +114,20 @@ jobs:
       matrix:
         platform:
           - target: aarch64-apple-ios
+    env:
+      MATRIX_TARGET: ${{ matrix.platform.target }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: |
         rustup update stable --no-self-update
         rustup default stable
-        rustup target add ${{ matrix.platform.target }}
-    - uses: Swatinem/rust-cache@v2
+        rustup target add ${MATRIX_TARGET}
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
     - name: build
-      run: cargo build -vv --target ${{ matrix.platform.target }}
+      run: cargo build -vv --target ${MATRIX_TARGET}
       working-directory: test-crate
       env:
         # If this isn't specified the default is iOS 7, for which zlib-ng will not compile due to the lack of thread-local storage.
@@ -120,7 +137,9 @@ jobs:
     name: Rustfmt
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@main
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: |
         rustup update stable --no-self-update
@@ -132,11 +151,13 @@ jobs:
     name: docs
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - run: |
           rustup update nightly --no-self-update
           rustup default nightly
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo doc
 
   msrv:
@@ -146,7 +167,9 @@ jobs:
     env:
       RUSTFLAGS: # No need to check warnings on old MSRV, unset `-Dwarnings`
     steps:
-    - uses: actions/checkout@main
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
     - name: Install Rust
       run: |
         msrv="$(
@@ -155,7 +178,7 @@ jobs:
         )"
         echo "MSRV: $msrv"
         rustup update "$msrv" --no-self-update && rustup default "$msrv"
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
     - run: cargo check
 
   success:
@@ -175,4 +198,6 @@ jobs:
     steps:
       # Manually check the status of all dependencies. `if: failure()` does not work.
       - name: check if any dependency failed
-        run: jq --exit-status 'all(.result == "success")' <<< '${{ toJson(needs) }}'
+        run: jq --exit-status 'all(.result == "success")' <<< "${JSON_NEEDS}"
+        env:
+          JSON_NEEDS: ${{ toJson(needs) }}
