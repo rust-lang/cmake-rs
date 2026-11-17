@@ -16,7 +16,7 @@ jobs:
           rustup update beta --no-self-update
           rustup default beta
           rustup component add clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo clippy --all-features --all-targets -- -D warnings
 
   test:
@@ -32,7 +32,7 @@ jobs:
       run: |
         rustup update ${{ matrix.rust }} --no-self-update
         rustup default ${{ matrix.rust }}
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
     - run: cargo test
     - name: Integration test
       run: cargo test --manifest-path test-crate/Cargo.toml
@@ -80,7 +80,7 @@ jobs:
     # FIXME: replace with taiki-e/install-action once a new cross version is released
     - name: Install cross
       run: RUSTFLAGS="" RUSTDOCFLAGS="" cargo install --git https://github.com/cross-rs/cross.git --rev a9301e91f72bba3850460512685f6b16062015ff cross
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
     - name: cross version
       run: cross --version
     - name: cross test
@@ -108,7 +108,7 @@ jobs:
         rustup update stable --no-self-update
         rustup default stable
         rustup target add ${{ matrix.platform.target }}
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
     - name: build
       run: cargo build -vv --target ${{ matrix.platform.target }}
       working-directory: test-crate
@@ -136,7 +136,7 @@ jobs:
       - run: |
           rustup update nightly --no-self-update
           rustup default nightly
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - run: cargo doc
 
   msrv:
@@ -155,7 +155,7 @@ jobs:
         )"
         echo "MSRV: $msrv"
         rustup update "$msrv" --no-self-update && rustup default "$msrv"
-    - uses: Swatinem/rust-cache@v2
+    - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
     - run: cargo check
 
   success:
