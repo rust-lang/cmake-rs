@@ -77,10 +77,12 @@ jobs:
         rustup update stable --no-self-update
         rustup default stable
         rustup target add ${{ matrix.platform.target }}
-    - uses: taiki-e/install-action@v2
-      with:
-        tool: cross
+    # FIXME: replace with taiki-e/install-action once a new cross version is released
+    - name: Install cross
+      run: RUSTFLAGS="" RUSTDOCFLAGS="" cargo install --git https://github.com/cross-rs/cross.git --rev a9301e91f72bba3850460512685f6b16062015ff cross
     - uses: Swatinem/rust-cache@v2
+    - name: cross version
+      run: cross --version
     - name: cross test
       run: cross test -vv --target ${{ matrix.platform.target }}
       working-directory: test-crate
