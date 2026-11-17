@@ -12,6 +12,10 @@ jobs:
     name: Release-plz
     runs-on: ubuntu-latest
     environment: publish
+    permissions:
+      contents: write # Required by `release-plz/action` to push tags, create releases, and push to the pull request branch.
+      pull-requests: write # Required by `release-plz/action` to detect the release PR and its commits (read only), and to create and update pull requests (write). 
+      id-token: write # Required by `release-plz/action` to obtain an OIDC token for Trusted Publishing.
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
