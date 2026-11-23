@@ -2,6 +2,25 @@
 
 ## [Unreleased]
 
+## [0.1.59](https://github.com/rust-lang/cmake-rs/compare/v0.1.58...v0.1.59) - 2026-11-23
+
+### Other
+
+- Bump `actions/checkout` to 7.0.1
+- Grant minimum required permissions
+- Disable all permissions by default
+- Expand `toJson(needs)` in `env`
+- Expand `matrix.rust` in `env`
+- Expand `matrix.platform.target` in `env`
+- Disable credential persistence
+- Pin `release-plz/action` to 0.5.148 hash
+- Pin `Swatinem/rust-cache` to 2.9.3 hash
+- Pin `actions/checkout` to 7.0.1 hash
+- Pin `actions/checkout` to 4.4.0 hash
+- Install cross from git repository ([#285](https://github.com/rust-lang/cmake-rs/pull/285))
+- Use `Tool::get_envs` instead of the deprecated `Tool::env` ([#283](https://github.com/rust-lang/cmake-rs/pull/283))
+- Switch to trusted publishing ([#281](https://github.com/rust-lang/cmake-rs/pull/281))
+
 ## [0.1.58](https://github.com/rust-lang/cmake-rs/compare/v0.1.57...v0.1.58) - 2026-03-26
 
 ### Fixed
