@@ -438,6 +438,13 @@ impl Config {
     ///
     /// This will run both the build system generator command as well as the
     /// command to build the library.
+    ///
+    /// Returns the destination directory that the library was installed into,
+    /// which is the `CMAKE_INSTALL_PREFIX` passed to CMake and defaults to
+    /// Cargo's `$OUT_DIR`. Installed files follow the usual CMake layout under
+    /// this path, such as `lib` (or `lib64`) and `include`, so a build script
+    /// commonly joins those onto the returned path when emitting link search
+    /// paths.
     pub fn build(&mut self) -> PathBuf {
         let target = match self.target.clone() {
             Some(t) => t,
