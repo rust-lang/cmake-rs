@@ -35,7 +35,8 @@
 //! use cmake::Config;
 //!
 //! let dst = Config::new("libfoo")
-//!                  .define("FOO", "BAR")
+//!                  .define("FOO", "BAR") // -DFOO=BAR
+//!                  .define_bool("BAZ", true) // -DBAZ=ON
 //!                  .cflag("-foo")
 //!                  .build();
 //! println!("cargo:rustc-link-search=native={}", dst.display());
@@ -270,6 +271,11 @@ impl Config {
         self.defines
             .push((k.as_ref().to_owned(), v.as_ref().to_owned()));
         self
+    }
+
+    /// Adds a new `-D` flag with a `ON`/`OFF` value to pass to cmake during the generation step.
+    pub fn define_bool<K: AsRef<OsStr>>(&mut self, k: K, v: bool) -> &mut Config {
+        self.define(k, if v { "ON" } else { "OFF" })
     }
 
     /// Registers a dependency for this compilation on the native library built
